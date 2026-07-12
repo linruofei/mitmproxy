@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+﻿import { createSlice } from "@reduxjs/toolkit";
 
 export enum ConnectionState {
     INIT = "CONNECTION_INIT",
@@ -22,13 +22,18 @@ const connectionSlice = createSlice({
     initialState: defaultState,
     reducers: {
         startFetching: (state) => {
-            if (state.state === ConnectionState.INIT) {
+            if (
+                state.state === ConnectionState.INIT ||
+                state.state === ConnectionState.ERROR
+            ) {
                 state.state = ConnectionState.FETCHING;
+                state.message = undefined;
             }
         },
         finishFetching: (state) => {
             if (state.state === ConnectionState.FETCHING) {
                 state.state = ConnectionState.ESTABLISHED;
+                state.message = undefined;
             }
         },
         connectionError: (state, action) => {
