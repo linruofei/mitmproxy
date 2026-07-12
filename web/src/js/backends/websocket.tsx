@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  The WebSocket backend is responsible for updating our knowledge of flows and events
  *  from the REST API and live updates delivered via a WebSocket connection.
  *  An alternative backend may use the REST API only to host static instances.
@@ -22,6 +22,9 @@ import {
     FilterName,
     initialState as initialFilterState,
 } from "../ducks/ui/filter";
+import {
+    ConnectionState,
+} from "../ducks/connection";
 
 export enum Resource {
     State = "state",
@@ -48,17 +51,37 @@ export default class WebsocketBackend {
     filterState: typeof initialFilterState;
     socket: WebSocket;
     messageQueue: Action[];
+    reconnectAttempts: number;
+    reconnectTimer: ReturnType<typeof setTimeout> | null;
+    private intentionalClose: boolean;
+    static readonly INITIAL_RECONNECT_DELAY = 1000;
+    static readonly MAX_RECONNECT_DELAY = 30000;
+    static readonly BACKOFF_FACTOR = 2;
 
     constructor(store) {
         this.activeFetches = {};
         this.store = store;
         this.filterState = initialFilterState;
         this.messageQueue = [];
+        this.reconnectAttempts = 0;
+        this.reconnectTimer = null;
+        this.intentionalClose = false;
         this.connect();
         this.store.subscribe(this.onStoreUpdate.bind(this));
     }
 
     connect() {
+        this.clearReconnect();
+        // Clean up old socket if it exists
+        if (this.socket) {
+            this.intentionalClose = true;
+            try {
+                this.socket.close();
+            } catch (e) {
+                // ignore
+            }
+        }
+        this.activeFetches = {};
         this.socket = new WebSocket(
             location.origin.replace("http", "ws") +
                 location.pathname.replace(/\/$/, "") +
@@ -87,6 +110,7 @@ export default class WebsocketBackend {
             this.fetchData(Resource.Options),
         ]);
         this.store.dispatch(connectionActions.finishFetching());
+        this.reconnectAttempts = 0;
     }
 
     onStoreUpdate() {
@@ -210,18 +234,48 @@ export default class WebsocketBackend {
     }
 
     onClose(closeEvent: CloseEvent) {
-        this.store.dispatch(
-            connectionActions.connectionError(
-                `Connection closed at ${new Date().toUTCString()} with error code ${
-                    closeEvent.code
-                }.`,
-            ),
-        );
+        // Ignore close events triggered intentionally by connect() closing the old socket.
+        if (this.intentionalClose) {
+            this.intentionalClose = false;
+            return;
+        }
+        // If we already transitioned to INIT (i.e. we initiated the close ourselves during reconnect),
+        // don't dispatch an error — the new connection attempt will handle lifecycle.
+        if (this.store.getState().connection.state !== ConnectionState.INIT) {
+            this.store.dispatch(
+                connectionActions.connectionError(
+                    `Connection closed at ${new Date().toUTCString()} with error code ${closeEvent.code}.`,
+                ),
+            );
+        }
         console.error("websocket connection closed", closeEvent);
+        this.scheduleReconnect();
     }
 
     onError(...args) {
-        // FIXME
         console.error("websocket connection errored", args);
+        // If the socket is not already closing/closed, close it to trigger onClose with reconnect
+        if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
+            this.socket.close();
+        }
+    }
+
+    scheduleReconnect() {
+        const delay = Math.min(
+            WebsocketBackend.INITIAL_RECONNECT_DELAY * Math.pow(WebsocketBackend.BACKOFF_FACTOR, this.reconnectAttempts),
+            WebsocketBackend.MAX_RECONNECT_DELAY,
+        );
+        this.reconnectAttempts++;
+        console.log(`WebSocket reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+        this.reconnectTimer = setTimeout(() => {
+            this.connect();
+        }, delay);
+    }
+
+    clearReconnect() {
+        if (this.reconnectTimer !== null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
     }
 }

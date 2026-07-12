@@ -1,4 +1,4 @@
-import WebSocketBackend from "../../backends/websocket";
+﻿import WebSocketBackend from "../../backends/websocket";
 import type { MockResponseInit } from "jest-fetch-mock";
 import fetchMock from "jest-fetch-mock";
 import { waitFor } from "../test-utils";
@@ -13,20 +13,29 @@ import { setFilter } from "../../ducks/ui/filter";
 import { TStore } from "../ducks/tutils";
 import { ConnectionState } from "../../ducks/connection";
 
+let mockClose: jest.Mock;
+
 beforeEach(() => {
     fetchMock.enableMocks();
     fetchMock.mockClear();
     const WebSocketOrig = WebSocket;
+    mockClose = jest.fn();
     // @ts-expect-error jest mock stuff
     jest.spyOn(global, "WebSocket").mockImplementation(() => ({
         addEventListener: () => 0,
         send: () => 0,
+        close: mockClose,
         readyState: WebSocketOrig.CONNECTING,
     }));
     // @ts-expect-error jest mock stuff
     global.WebSocket.OPEN = WebSocketOrig.OPEN;
     // @ts-expect-error jest mock stuff
     global.WebSocket.CONNECTING = WebSocketOrig.CONNECTING;
+    jest.useFakeTimers();
+});
+
+afterEach(() => {
+    jest.useRealTimers();
 });
 
 describe("websocket backend", () => {
@@ -79,6 +88,8 @@ describe("websocket backend", () => {
         await waitFor(() =>
             expect(store.getState().eventLog.list.length).toBe(1),
         );
+
+        backend.clearReconnect();
     });
 
     test("basic", async () => {
@@ -91,6 +102,9 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: (e) => actions.push(e),
             subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.ESTABLISHED },
+            }),
         });
 
         await backend.onOpen();
@@ -129,13 +143,20 @@ describe("websocket backend", () => {
         expect(fetchMock.mock.calls).toHaveLength(5);
 
         console.error = jest.fn();
+        console.log = jest.fn();
         backend.onClose(new CloseEvent("Connection closed"));
         expect(console.error).toHaveBeenCalledTimes(1);
         expect(actions[0].type).toBe(connectionActions.connectionError.type);
+        expect(backend.reconnectAttempts).toBe(1);
+        // Clear the reconnect timer so it doesn't fire
+        backend.clearReconnect();
         actions.length = 0;
 
         backend.onError(null);
+        // onError calls socket.close() -> triggers onClose -> triggers scheduleReconnect
         expect(console.error).toHaveBeenCalledTimes(2);
+        expect(mockClose).toHaveBeenCalled();
+        backend.clearReconnect();
 
         jest.restoreAllMocks();
     });
@@ -147,6 +168,9 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: () => {},
             subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.ESTABLISHED },
+            }),
         });
         backend.onMessage({ type: "flows/add" });
         backend.onMessage({ type: "flows/update" });
@@ -158,6 +182,7 @@ describe("websocket backend", () => {
         backend.onMessage({ type: "options/update" });
         backend.onMessage({ type: "state/update" });
         expect(fetchMock.mock.calls.length).toBe(2);
+        backend.clearReconnect();
     });
 
     test("filter updates", () => {
@@ -170,5 +195,109 @@ describe("websocket backend", () => {
                 payload: { expr: "foo", name: "search" },
             },
         ]);
+        backend.clearReconnect();
+    });
+
+    test("reconnection on close", () => {
+        const actions: Array<UnknownAction> = [];
+        const backend = new WebSocketBackend({
+            dispatch: (e) => actions.push(e),
+            subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.ESTABLISHED },
+            }),
+        });
+
+        console.error = jest.fn();
+        console.log = jest.fn();
+
+        // Initially no reconnect scheduled
+        expect(backend.reconnectTimer).toBeNull();
+        expect(backend.reconnectAttempts).toBe(0);
+
+        // Trigger close
+        backend.onClose(new CloseEvent("Connection lost"));
+        expect(backend.reconnectAttempts).toBe(1);
+        expect(backend.reconnectTimer).not.toBeNull();
+        expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining("WebSocket reconnecting in 1000ms (attempt 1)"),
+        );
+
+        // Advance timer to trigger reconnect
+        const mockSocket = backend.socket;
+        jest.advanceTimersByTime(1000);
+        // connect() should have been called again, creating a new WebSocket
+        expect(backend.socket).not.toBe(mockSocket);
+        expect(backend.reconnectTimer).toBeNull();
+
+        backend.clearReconnect();
+    });
+
+    test("exponential backoff on reconnect", () => {
+        const backend = new WebSocketBackend({
+            dispatch: () => {},
+            subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.ESTABLISHED },
+            }),
+        });
+
+        console.log = jest.fn();
+        console.error = jest.fn();
+
+        // First close -> 1s delay
+        backend.onClose(new CloseEvent("close"));
+        expect(backend.reconnectAttempts).toBe(1);
+        expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining("1000ms (attempt 1)"),
+        );
+        backend.clearReconnect();
+
+        // Second close -> 2s delay
+        backend.onClose(new CloseEvent("close"));
+        expect(backend.reconnectAttempts).toBe(2);
+        expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining("2000ms (attempt 2)"),
+        );
+        backend.clearReconnect();
+
+        // Third close -> 4s delay
+        backend.onClose(new CloseEvent("close"));
+        expect(backend.reconnectAttempts).toBe(3);
+        expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining("4000ms (attempt 3)"),
+        );
+        backend.clearReconnect();
+    });
+
+    test("reset reconnect attempts on successful open", async () => {
+        fetchMock.mockOnceIf("./state", "{}");
+        fetchMock.mockOnceIf("./flows", "[]");
+        fetchMock.mockOnceIf("./events", "[]");
+        fetchMock.mockOnceIf("./options", "{}");
+
+        const backend = new WebSocketBackend({
+            dispatch: () => {},
+            subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.INIT },
+            }),
+        });
+
+        console.log = jest.fn();
+        console.error = jest.fn();
+
+        // Simulate a few reconnection attempts
+        backend.reconnectAttempts = 5;
+
+        // Successfully connect
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.OPEN;
+        await backend.onOpen();
+
+        // Attempts should be reset
+        expect(backend.reconnectAttempts).toBe(0);
+
+        backend.clearReconnect();
     });
 });
