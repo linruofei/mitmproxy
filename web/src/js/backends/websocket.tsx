@@ -254,9 +254,13 @@ export default class WebsocketBackend {
 
     onError(...args) {
         console.error("websocket connection errored", args);
-        // If the socket is not already closing/closed, close it to trigger onClose with reconnect
+        // Trigger close to ensure onClose fires and schedules a reconnect.
+        // If the socket is already closed (e.g. initial connection failure),
+        // onClose may not fire — so schedule the reconnect directly as a fallback.
         if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
             this.socket.close();
+        } else {
+            this.scheduleReconnect();
         }
     }
 
@@ -279,3 +283,4 @@ export default class WebsocketBackend {
         }
     }
 }
+

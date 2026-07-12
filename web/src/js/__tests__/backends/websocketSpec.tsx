@@ -270,6 +270,27 @@ describe("websocket backend", () => {
         backend.clearReconnect();
     });
 
+
+    test("onError with closed socket triggers reconnect directly", () => {
+        const actions: Array<UnknownAction> = [];
+        const backend = new WebSocketBackend({
+            dispatch: (e) => actions.push(e),
+            subscribe: () => {},
+            getState: () => ({
+                connection: { state: ConnectionState.ESTABLISHED },
+            }),
+        });
+
+        console.error = jest.fn();
+        console.log = jest.fn();
+
+        // after connection failure, the socket may already be CLOSED
+        backend.onError(null);
+        // should schedule reconnect directly since socket is already CLOSED
+        expect(backend.reconnectTimer).not.toBeNull();
+        expect(backend.reconnectAttempts).toBe(1);
+        backend.clearReconnect();
+    });
     test("reset reconnect attempts on successful open", async () => {
         fetchMock.mockOnceIf("./state", "{}");
         fetchMock.mockOnceIf("./flows", "[]");
@@ -301,3 +322,4 @@ describe("websocket backend", () => {
         backend.clearReconnect();
     });
 });
+
