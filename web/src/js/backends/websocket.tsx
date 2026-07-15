@@ -74,7 +74,9 @@ export default class WebsocketBackend {
         this.clearReconnect();
         // Clean up old socket if it exists
         if (this.socket) {
-            this.intentionalClose = true;
+            if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
+                this.intentionalClose = true;
+            }
             try {
                 this.socket.close();
             } catch (e) {
