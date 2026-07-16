@@ -79,7 +79,7 @@ export default class WebsocketBackend {
             }
             try {
                 this.socket.close();
-            } catch (e) {
+            } catch {
                 // ignore
             }
         }
@@ -98,21 +98,36 @@ export default class WebsocketBackend {
     }
 
     async onOpen() {
-        // Send all queued messages.
-        for (const message of this.messageQueue) {
-            this.socket.send(JSON.stringify(message));
-        }
-        this.messageQueue = [];
-        // useful side effect: onStoreUpdate will be called
         this.store.dispatch(connectionActions.startFetching());
-        await Promise.all([
+        const fetches = [
             this.fetchData(Resource.State),
             this.fetchData(Resource.Flows),
             this.fetchData(Resource.Events),
             this.fetchData(Resource.Options),
-        ]);
-        this.store.dispatch(connectionActions.finishFetching());
-        this.reconnectAttempts = 0;
+        ];
+
+        // Send all queued messages once activeFetches is set up, so filter
+        // responses are replayed after the fresh flow snapshot if they race.
+        for (const message of this.messageQueue) {
+            this.socket.send(JSON.stringify(message));
+        }
+        this.messageQueue = [];
+        this.sendCurrentFilters();
+
+        try {
+            await Promise.all(fetches);
+            this.store.dispatch(connectionActions.finishFetching());
+            this.reconnectAttempts = 0;
+        } catch (e) {
+            this.activeFetches = {};
+            this.store.dispatch(
+                connectionActions.connectionError(
+                    `Fetching initial data failed at ${new Date().toUTCString()}.`,
+                ),
+            );
+            console.error("fetching initial data failed", e);
+            this.scheduleReconnect();
+        }
     }
 
     onStoreUpdate() {
@@ -130,6 +145,20 @@ export default class WebsocketBackend {
                     },
                 });
             }
+        }
+        this.filterState = storeFilterState;
+    }
+
+    sendCurrentFilters() {
+        const storeFilterState = this.store.getState().ui.filter;
+        for (const name of Object.values(FilterName)) {
+            this.sendMessage({
+                type: "flows/updateFilter",
+                payload: {
+                    name,
+                    expr: storeFilterState[name],
+                },
+            });
         }
         this.filterState = storeFilterState;
     }
@@ -196,10 +225,8 @@ export default class WebsocketBackend {
     sendMessage(action: PayloadAction<any>) {
         if (this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify(action));
-        } else if (this.socket.readyState === WebSocket.CONNECTING) {
-            this.messageQueue.push(action);
         } else {
-            console.error("WebSocket is not open. Cannot send:", action);
+            this.messageQueue.push(action);
         }
     }
 
@@ -267,6 +294,9 @@ export default class WebsocketBackend {
     }
 
     scheduleReconnect() {
+        if (this.reconnectTimer !== null) {
+            return;
+        }
         const delay = Math.min(
             WebsocketBackend.INITIAL_RECONNECT_DELAY * Math.pow(WebsocketBackend.BACKOFF_FACTOR, this.reconnectAttempts),
             WebsocketBackend.MAX_RECONNECT_DELAY,

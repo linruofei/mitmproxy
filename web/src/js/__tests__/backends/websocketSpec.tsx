@@ -13,17 +13,30 @@ import { setFilter } from "../../ducks/ui/filter";
 import { TStore } from "../ducks/tutils";
 import { ConnectionState } from "../../ducks/connection";
 
-let mockClose: jest.Mock;
+let mockClose: jest.Mock, mockSend: jest.Mock;
+
+function mockState(connectionState = ConnectionState.ESTABLISHED) {
+    return {
+        connection: { state: connectionState },
+        ui: {
+            filter: {
+                search: "",
+                highlight: "",
+            },
+        },
+    };
+}
 
 beforeEach(() => {
     fetchMock.enableMocks();
     fetchMock.mockClear();
     const WebSocketOrig = WebSocket;
     mockClose = jest.fn();
+    mockSend = jest.fn();
     // @ts-expect-error jest mock stuff
     jest.spyOn(global, "WebSocket").mockImplementation(() => ({
         addEventListener: () => 0,
-        send: () => 0,
+        send: mockSend,
         close: mockClose,
         readyState: WebSocketOrig.CONNECTING,
     }));
@@ -31,6 +44,8 @@ beforeEach(() => {
     global.WebSocket.OPEN = WebSocketOrig.OPEN;
     // @ts-expect-error jest mock stuff
     global.WebSocket.CONNECTING = WebSocketOrig.CONNECTING;
+    // @ts-expect-error jest mock stuff
+    global.WebSocket.CLOSED = WebSocketOrig.CLOSED;
     jest.useFakeTimers();
 });
 
@@ -102,9 +117,7 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: (e) => actions.push(e),
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.ESTABLISHED },
-            }),
+            getState: () => mockState(),
         });
 
         await backend.onOpen();
@@ -168,9 +181,7 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: () => {},
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.ESTABLISHED },
-            }),
+            getState: () => mockState(),
         });
         backend.onMessage({ type: "flows/add" });
         backend.onMessage({ type: "flows/update" });
@@ -203,9 +214,7 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: (e) => actions.push(e),
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.ESTABLISHED },
-            }),
+            getState: () => mockState(),
         });
 
         console.error = jest.fn();
@@ -237,9 +246,7 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: () => {},
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.ESTABLISHED },
-            }),
+            getState: () => mockState(),
         });
 
         console.log = jest.fn();
@@ -276,15 +283,15 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: (e) => actions.push(e),
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.ESTABLISHED },
-            }),
+            getState: () => mockState(),
         });
 
         console.error = jest.fn();
         console.log = jest.fn();
 
         // after connection failure, the socket may already be CLOSED
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.CLOSED;
         backend.onError(null);
         // should schedule reconnect directly since socket is already CLOSED
         expect(backend.reconnectTimer).not.toBeNull();
@@ -300,9 +307,7 @@ describe("websocket backend", () => {
         const backend = new WebSocketBackend({
             dispatch: () => {},
             subscribe: () => {},
-            getState: () => ({
-                connection: { state: ConnectionState.INIT },
-            }),
+            getState: () => mockState(ConnectionState.INIT),
         });
 
         console.log = jest.fn();
@@ -318,6 +323,86 @@ describe("websocket backend", () => {
 
         // Attempts should be reset
         expect(backend.reconnectAttempts).toBe(0);
+
+        backend.clearReconnect();
+    });
+
+    test("resends current filters when websocket opens", async () => {
+        fetchMock.mockOnceIf("./state", "{}");
+        fetchMock.mockOnceIf("./flows", "[]");
+        fetchMock.mockOnceIf("./events", "[]");
+        fetchMock.mockOnceIf("./options", "{}");
+
+        const store = TStore(null);
+        const backend = new WebSocketBackend(store);
+        store.dispatch(setFilter("~u /api"));
+
+        expect(backend.messageQueue).toEqual([
+            {
+                type: "flows/updateFilter",
+                payload: { expr: "~u /api", name: "search" },
+            },
+        ]);
+
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.OPEN;
+        await backend.onOpen();
+
+        const sentMessages = mockSend.mock.calls.map(([message]) =>
+            JSON.parse(message),
+        );
+        expect(sentMessages).toEqual(
+            expect.arrayContaining([
+                {
+                    type: "flows/updateFilter",
+                    payload: { expr: "~u /api", name: "search" },
+                },
+                {
+                    type: "flows/updateFilter",
+                    payload: { expr: "", name: "highlight" },
+                },
+            ]),
+        );
+        expect(backend.messageQueue).toEqual([]);
+    });
+
+    test("failed initial fetch clears active fetches and schedules reconnect", async () => {
+        fetchMock.mockOnceIf("./state", "{}");
+        fetchMock.mockOnceIf("./flows", () => Promise.reject(new Error("boom")));
+        fetchMock.mockOnceIf("./events", "[]");
+        fetchMock.mockOnceIf("./options", "{}");
+
+        const actions: Array<UnknownAction> = [];
+        const backend = new WebSocketBackend({
+            dispatch: (e) => actions.push(e),
+            subscribe: () => {},
+            getState: () => mockState(ConnectionState.INIT),
+        });
+
+        console.error = jest.fn();
+        console.log = jest.fn();
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.OPEN;
+        await backend.onOpen();
+
+        expect(backend.activeFetches).toEqual({});
+        expect(backend.reconnectTimer).not.toBeNull();
+        expect(actions.at(-1)?.type).toBe(
+            connectionActions.connectionError.type,
+        );
+
+        actions.length = 0;
+        backend.onMessage({
+            type: "events/add",
+            payload: {
+                id: "42",
+                message: "test",
+                level: LogLevel.info,
+            } as EventLogItem,
+        });
+        expect(actions).toEqual([
+            EVENTS_ADD({ id: "42", level: LogLevel.info, message: "test" }),
+        ]);
 
         backend.clearReconnect();
     });
