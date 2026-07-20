@@ -53,7 +53,6 @@ export default class WebsocketBackend {
     messageQueue: Action[];
     reconnectAttempts: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
-    private intentionalClose: boolean;
     static readonly INITIAL_RECONNECT_DELAY = 1000;
     static readonly MAX_RECONNECT_DELAY = 30000;
     static readonly BACKOFF_FACTOR = 2;
@@ -65,7 +64,6 @@ export default class WebsocketBackend {
         this.messageQueue = [];
         this.reconnectAttempts = 0;
         this.reconnectTimer = null;
-        this.intentionalClose = false;
         this.connect();
         this.store.subscribe(this.onStoreUpdate.bind(this));
     }
@@ -74,9 +72,6 @@ export default class WebsocketBackend {
         this.clearReconnect();
         // Clean up old socket if it exists
         if (this.socket) {
-            if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
-                this.intentionalClose = true;
-            }
             try {
                 this.socket.close();
             } catch {
@@ -89,15 +84,21 @@ export default class WebsocketBackend {
                 location.pathname.replace(/\/$/, "") +
                 "/updates",
         );
-        this.socket.addEventListener("open", () => this.onOpen());
-        this.socket.addEventListener("close", (event) => this.onClose(event));
-        this.socket.addEventListener("message", (msg) =>
-            this.onMessage(JSON.parse(msg.data)),
-        );
-        this.socket.addEventListener("error", (error) => this.onError(error));
+        const socket = this.socket;
+        socket.addEventListener("open", () => this.onOpen(socket));
+        socket.addEventListener("close", (event) => this.onClose(event, socket));
+        socket.addEventListener("message", (msg) => {
+            if (socket === this.socket) {
+                this.onMessage(JSON.parse(msg.data));
+            }
+        });
+        socket.addEventListener("error", (error) => this.onError(socket, error));
     }
 
-    async onOpen() {
+    async onOpen(socket = this.socket) {
+        if (socket !== this.socket) {
+            return;
+        }
         this.store.dispatch(connectionActions.startFetching());
         const fetches = [
             this.fetchData(Resource.State),
@@ -109,16 +110,22 @@ export default class WebsocketBackend {
         // Send all queued messages once activeFetches is set up, so filter
         // responses are replayed after the fresh flow snapshot if they race.
         for (const message of this.messageQueue) {
-            this.socket.send(JSON.stringify(message));
+            socket.send(JSON.stringify(message));
         }
         this.messageQueue = [];
         this.sendCurrentFilters();
 
         try {
             await Promise.all(fetches);
+            if (socket !== this.socket) {
+                return;
+            }
             this.store.dispatch(connectionActions.finishFetching());
             this.reconnectAttempts = 0;
         } catch (e) {
+            if (socket !== this.socket) {
+                return;
+            }
             this.activeFetches = {};
             this.store.dispatch(
                 connectionActions.connectionError(
@@ -262,10 +269,9 @@ export default class WebsocketBackend {
         queue.forEach((msg) => this.store.dispatch(msg));
     }
 
-    onClose(closeEvent: CloseEvent) {
-        // Ignore close events triggered intentionally by connect() closing the old socket.
-        if (this.intentionalClose) {
-            this.intentionalClose = false;
+    onClose(closeEvent: CloseEvent, socket = this.socket) {
+        // Ignore close events from sockets superseded by a newer reconnect.
+        if (socket !== this.socket) {
             return;
         }
         // If we already transitioned to INIT (i.e. we initiated the close ourselves during reconnect),
@@ -281,7 +287,10 @@ export default class WebsocketBackend {
         this.scheduleReconnect();
     }
 
-    onError(...args) {
+    onError(socket = this.socket, ...args) {
+        if (socket !== this.socket) {
+            return;
+        }
         console.error("websocket connection errored", args);
         // Trigger close to ensure onClose fires and schedules a reconnect.
         // If the socket is already closed (e.g. initial connection failure),
