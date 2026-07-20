@@ -192,6 +192,7 @@ describe("websocket backend", () => {
         backend.onMessage({ type: "events/reset" });
         backend.onMessage({ type: "options/update" });
         backend.onMessage({ type: "state/update" });
+        backend.onMessage({ type: "pong" });
         expect(fetchMock.mock.calls.length).toBe(2);
         backend.clearReconnect();
     });
@@ -322,6 +323,70 @@ describe("websocket backend", () => {
         expect(actions[0].type).toBe(connectionActions.connectionError.type);
 
         backend.clearReconnect();
+    });
+
+    test("heartbeat timeout schedules reconnect", async () => {
+        fetchMock.mockOnceIf("./state", "{}");
+        fetchMock.mockOnceIf("./flows", "[]");
+        fetchMock.mockOnceIf("./events", "[]");
+        fetchMock.mockOnceIf("./options", "{}");
+
+        const actions: Array<UnknownAction> = [];
+        const backend = new WebSocketBackend({
+            dispatch: (e) => actions.push(e),
+            subscribe: () => {},
+            getState: () => mockState(ConnectionState.ESTABLISHED),
+        });
+
+        console.error = jest.fn();
+        console.log = jest.fn();
+
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.OPEN;
+        await backend.onOpen();
+
+        jest.advanceTimersByTime(WebSocketBackend.HEARTBEAT_INTERVAL);
+        expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: "ping" }));
+
+        jest.advanceTimersByTime(WebSocketBackend.HEARTBEAT_TIMEOUT);
+        expect(mockClose).toHaveBeenCalled();
+        expect(backend.reconnectTimer).not.toBeNull();
+        expect(actions.at(-1)?.type).toBe(
+            connectionActions.connectionError.type,
+        );
+
+        backend.clearReconnect();
+    });
+
+    test("heartbeat pong clears timeout", async () => {
+        fetchMock.mockOnceIf("./state", "{}");
+        fetchMock.mockOnceIf("./flows", "[]");
+        fetchMock.mockOnceIf("./events", "[]");
+        fetchMock.mockOnceIf("./options", "{}");
+
+        const backend = new WebSocketBackend({
+            dispatch: () => {},
+            subscribe: () => {},
+            getState: () => mockState(ConnectionState.ESTABLISHED),
+        });
+
+        console.error = jest.fn();
+        console.log = jest.fn();
+
+        // @ts-expect-error jest mock stuff
+        backend.socket.readyState = WebSocket.OPEN;
+        await backend.onOpen();
+
+        jest.advanceTimersByTime(WebSocketBackend.HEARTBEAT_INTERVAL);
+        expect(backend.heartbeatTimeoutTimer).not.toBeNull();
+
+        backend.onMessage({ type: "pong" });
+        expect(backend.heartbeatTimeoutTimer).toBeNull();
+
+        jest.advanceTimersByTime(WebSocketBackend.HEARTBEAT_TIMEOUT);
+        expect(backend.reconnectTimer).toBeNull();
+
+        backend.clearHeartbeat();
     });
 
     test("reset reconnect attempts on successful open", async () => {

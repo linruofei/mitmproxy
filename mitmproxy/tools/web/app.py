@@ -488,6 +488,8 @@ class ClientConnection(WebSocketEventBroadcaster):
         try:
             data = json.loads(message)
             match data["type"]:
+                case "ping":
+                    self.send(self._json_dumps({"type": "pong"}))
                 case "flows/updateFilter":
                     self.update_filter(data["payload"]["name"], data["payload"]["expr"])
                 case other:

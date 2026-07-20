@@ -553,6 +553,20 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
             self.assertEqual(ws_client.close_code, 1011)
             self.assertEqual(ws_client.close_reason, "Internal server error.")
 
+    @tornado.testing.gen_test
+    def test_websocket_ping(self):
+        ws_req = httpclient.HTTPRequest(
+            f"ws://localhost:{self.get_http_port()}/updates",
+            headers={"Cookie": self.auth_cookie},
+        )
+        ws_client = yield tornado.websocket.websocket_connect(ws_req)
+
+        yield ws_client.write_message("""{"type": "ping"}""")
+        response = yield ws_client.read_message()
+
+        assert json.loads(response) == {"type": "pong"}
+        ws_client.close()
+
     def test_process_list(self):
         try:
             mitmproxy_rs.process_info.active_executables()

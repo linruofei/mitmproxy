@@ -43,7 +43,8 @@ type WebsocketMessageType =
     | "events/add"
     | "events/reset"
     | "options/update"
-    | "state/update";
+    | "state/update"
+    | "pong";
 
 export default class WebsocketBackend {
     activeFetches: Partial<{ [key in Resource]: Array<Action> }>;
@@ -53,9 +54,13 @@ export default class WebsocketBackend {
     messageQueue: Action[];
     reconnectAttempts: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
+    heartbeatTimer: ReturnType<typeof setInterval> | null;
+    heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | null;
     static readonly INITIAL_RECONNECT_DELAY = 1000;
     static readonly MAX_RECONNECT_DELAY = 30000;
     static readonly BACKOFF_FACTOR = 2;
+    static readonly HEARTBEAT_INTERVAL = 15000;
+    static readonly HEARTBEAT_TIMEOUT = 10000;
 
     constructor(store) {
         this.activeFetches = {};
@@ -64,12 +69,15 @@ export default class WebsocketBackend {
         this.messageQueue = [];
         this.reconnectAttempts = 0;
         this.reconnectTimer = null;
+        this.heartbeatTimer = null;
+        this.heartbeatTimeoutTimer = null;
         this.connect();
         this.store.subscribe(this.onStoreUpdate.bind(this));
     }
 
     connect() {
         this.clearReconnect();
+        this.clearHeartbeat();
         // Clean up old socket if it exists
         if (this.socket) {
             try {
@@ -99,6 +107,7 @@ export default class WebsocketBackend {
         if (socket !== this.socket) {
             return;
         }
+        this.startHeartbeat(socket);
         this.store.dispatch(connectionActions.startFetching());
         const fetches = [
             this.fetchData(Resource.State),
@@ -219,6 +228,8 @@ export default class WebsocketBackend {
                     Resource.State,
                     STATE_UPDATE(msg.payload),
                 );
+            case "pong":
+                return this.onPong();
             case "flows/reset":
                 return this.fetchData(Resource.Flows);
             case "events/reset":
@@ -226,6 +237,51 @@ export default class WebsocketBackend {
             /* istanbul ignore next @preserve */
             default:
                 assertNever(msg.type);
+        }
+    }
+
+    startHeartbeat(socket = this.socket) {
+        this.clearHeartbeat();
+        this.heartbeatTimer = setInterval(() => {
+            if (socket !== this.socket) {
+                return;
+            }
+            this.sendPing(socket);
+        }, WebsocketBackend.HEARTBEAT_INTERVAL);
+    }
+
+    sendPing(socket = this.socket) {
+        if (socket !== this.socket || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        if (this.heartbeatTimeoutTimer !== null) {
+            return;
+        }
+        socket.send(JSON.stringify({ type: "ping" }));
+        this.heartbeatTimeoutTimer = setTimeout(() => {
+            if (socket !== this.socket) {
+                return;
+            }
+            console.error("websocket heartbeat timed out");
+            this.store.dispatch(
+                connectionActions.connectionError(
+                    `Connection heartbeat timed out at ${new Date().toUTCString()}.`,
+                ),
+            );
+            this.clearHeartbeat();
+            try {
+                socket.close();
+            } catch {
+                // ignore
+            }
+            this.scheduleReconnect();
+        }, WebsocketBackend.HEARTBEAT_TIMEOUT);
+    }
+
+    onPong() {
+        if (this.heartbeatTimeoutTimer !== null) {
+            clearTimeout(this.heartbeatTimeoutTimer);
+            this.heartbeatTimeoutTimer = null;
         }
     }
 
@@ -274,6 +330,7 @@ export default class WebsocketBackend {
         if (socket !== this.socket) {
             return;
         }
+        this.clearHeartbeat();
         // If we already transitioned to INIT (i.e. we initiated the close ourselves during reconnect),
         // don't dispatch an error — the new connection attempt will handle lifecycle.
         if (this.store.getState().connection.state !== ConnectionState.INIT) {
@@ -303,6 +360,7 @@ export default class WebsocketBackend {
     }
 
     scheduleReconnect() {
+        this.clearHeartbeat();
         if (this.reconnectTimer !== null) {
             return;
         }
@@ -323,5 +381,15 @@ export default class WebsocketBackend {
             this.reconnectTimer = null;
         }
     }
-}
 
+    clearHeartbeat() {
+        if (this.heartbeatTimer !== null) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+        if (this.heartbeatTimeoutTimer !== null) {
+            clearTimeout(this.heartbeatTimeoutTimer);
+            this.heartbeatTimeoutTimer = null;
+        }
+    }
+}
