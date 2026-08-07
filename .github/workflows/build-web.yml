@@ -39,25 +39,31 @@ jobs:
         working-directory: web
         run: npm run ci-build-release
 
-      - name: Copy build output
+      - name: Check build output
         run: |
           echo "workspace:"
           pwd
 
-          echo "before:"
-          ls -lah ../tools/web || true
+          echo "find generated files:"
+          find . -path "*/tools/web/index.html" -o -path "*/tools/web/static"
 
+      - name: Prepare web static
+        run: |
+          echo "prepare tools/web"
+
+          # 删除旧文件
           rm -rf tools/web
 
           mkdir -p tools
 
-          cp -r ../tools/web tools/
+          # 从构建目录复制回来
+          cp -r mitmproxy/tools/web tools/
 
-          echo "after:"
+          echo "result:"
           ls -lah tools/web
           ls -lah tools/web/static
 
-      - name: Commit static files
+      - name: Commit generated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
