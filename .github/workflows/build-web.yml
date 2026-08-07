@@ -1,6 +1,8 @@
 name: Build Web Static
 
 on:
+  workflow_dispatch:
+
   push:
     branches:
       - main
@@ -37,12 +39,18 @@ jobs:
         working-directory: web
         run: npm run ci-build-release
 
+      - name: Check build output
+        run: |
+          echo "Check generated files:"
+          ls -lah tools/web || true
+          ls -lah tools/web/static || true
+
       - name: Commit static files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add tools/web/static
+          git add tools/web/index.html tools/web/static
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
