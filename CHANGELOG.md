@@ -7,6 +7,13 @@
 
 ## Unreleased: mitmproxy next
 
+- Add `launch_edge()` to the Browser addon, so `browser.start edge` can
+  launch an isolated, proxy-configured instance of Microsoft Edge, matching
+  the existing Chrome and Firefox support.
+  ([#8407](https://github.com/mitmproxy/mitmproxy/issues/8407), @eliahu-frusin)
+- Replace deprecated pyparsing APIs with their snake_case equivalents to avoid
+  `PyparsingDeprecationWarning` during command and flow-filter parsing.
+  ([#8344](https://github.com/mitmproxy/mitmproxy/pull/8344), @Dnsayhey)
 - mitmweb: Replace the flow table's raster resource type icons with SVG icons so they follow the active theme.
   ([#8337](https://github.com/mitmproxy/mitmproxy/pull/8337), @sleeyax)
 - Bracket IPv6 target literals in the `CONNECT` request and `Host` header sent
@@ -18,6 +25,10 @@
 - Remove the unused `msgpack` dependency. The msgpack contentview is
   implemented in Rust and shipped with `mitmproxy_rs` since mitmproxy 12.
   ([#8319](https://github.com/mitmproxy/mitmproxy/pull/8319), @lukehsiao)
+- Fix a crash on OpenSSL builds that reject a TLS protocol version at
+  context-setup time (e.g. SSLv3): `is_supported_version` now treats such a
+  version as unsupported instead of raising an unhandled `SSL.Error`.
+  ([#8294](https://github.com/mitmproxy/mitmproxy/pull/8294), @gaurav0107)
 - mitmweb: Fix the flow table header of the sorted column keeping a light background and hiding its sort chevron under the dark theme.
   ([#8336](https://github.com/mitmproxy/mitmproxy/pull/8336), @sleeyax)
 - mitmweb: Add a dark theme, selectable via the new `web_theme` option (`system`, `dark`, or `light`).
@@ -46,6 +57,8 @@
   ([#8296](https://github.com/mitmproxy/mitmproxy/pull/8296), @tbodt)
 - mitmweb: Fix for modified reason phrase not being sent
   ([#8333](https://github.com/mitmproxy/mitmproxy/pull/8333), @grusski)
+- Use stdlib (PEP-784) for Zstandard compression on Python 3.14+
+  ([#8397](https://github.com/mitmproxy/mitmproxy/pull/8397), @Rogdham)
 
 ## 12 May 2026: mitmproxy 12.2.3
 
