@@ -35,6 +35,7 @@ from mitmproxy import http
 from mitmproxy import io
 from mitmproxy import log
 from mitmproxy import optmanager
+from mitmproxy import user_variables
 from mitmproxy import version
 from mitmproxy.dns import DNSFlow
 from mitmproxy.http import HTTPFlow
@@ -586,8 +587,11 @@ class FlowHandler(RequestHandler):
             for a, b in self.json.items():
                 if a == "request" and hasattr(flow, "request"):
                     request: mitmproxy.http.Request = flow.request
+                    view_name = b.get("view")
                     for k, v in b.items():
-                        if k in ["method", "scheme", "host", "path", "http_version"]:
+                        if k == "view":
+                            continue
+                        elif k in ["method", "scheme", "host", "path", "http_version"]:
                             setattr(request, k, str(v))
                         elif k == "port":
                             request.port = int(v)
@@ -603,14 +607,32 @@ class FlowHandler(RequestHandler):
                             for trailer in v:
                                 request.trailers.add(*trailer)
                         elif k == "content":
-                            request.text = v
+                            if view_name and view_name.lower() != "raw":
+                                cv = contentviews.registry.get(view_name.lower())
+                                if cv and isinstance(cv, contentviews.InteractiveContentview):
+                                    try:
+                                        request.content = contentviews.reencode_message(
+                                            v,
+                                            request,
+                                            flow,
+                                            cv.name,
+                                        )
+                                    except Exception as e:
+                                        raise APIError(400, f"Failed to reencode content with {cv.name}: {e}")
+                                else:
+                                    request.text = v
+                            else:
+                                request.text = v
                         else:
                             raise APIError(400, f"Unknown update request.{k}: {v}")
 
                 elif a == "response" and hasattr(flow, "response"):
                     response: mitmproxy.http.Response = flow.response
+                    view_name = b.get("view")
                     for k, v in b.items():
-                        if k == "reason":
+                        if k == "view":
+                            continue
+                        elif k == "reason":
                             response.reason = str(v)
                         elif k == "http_version":
                             response.http_version = str(v)
@@ -628,7 +650,22 @@ class FlowHandler(RequestHandler):
                             for trailer in v:
                                 response.trailers.add(*trailer)
                         elif k == "content":
-                            response.text = v
+                            if view_name and view_name.lower() != "raw":
+                                cv = contentviews.registry.get(view_name.lower())
+                                if cv and isinstance(cv, contentviews.InteractiveContentview):
+                                    try:
+                                        response.content = contentviews.reencode_message(
+                                            v,
+                                            response,
+                                            flow,
+                                            cv.name,
+                                        )
+                                    except Exception as e:
+                                        raise APIError(400, f"Failed to reencode content with {cv.name}: {e}")
+                                else:
+                                    response.text = v
+                            else:
+                                response.text = v
                         else:
                             raise APIError(400, f"Unknown update response.{k}: {v}")
                 elif a == "marked":
@@ -712,6 +749,10 @@ class FlowContentView(RequestHandler):
             syntax_highlight=pretty.syntax_highlight,
             description=pretty.description,
         )
+        if pretty.view_name:
+            cv = contentviews.registry.get(pretty.view_name.lower())
+            if isinstance(cv, contentviews.InteractiveContentview):
+                ret["interactive"] = True
         if from_client is not None:
             ret["from_client"] = from_client
         if timestamp is not None:
@@ -825,6 +866,20 @@ class SaveOptions(RequestHandler):
         pass
 
 
+class Variables(RequestHandler):
+    def get(self):
+        self.write(user_variables.get_all())
+
+    def put(self):
+        if not isinstance(self.json, dict):
+            raise APIError(400, "Expected a JSON object of variables.")
+        try:
+            user_variables.set_all(self.json)
+        except Exception as err:
+            raise APIError(500, f"Failed to save variables: {err}")
+        self.write(user_variables.get_all())
+
+
 class State(RequestHandler):
     # Separate method for testability.
     @staticmethod
@@ -910,6 +965,7 @@ handlers = [
     (r"/clear", ClearAll),
     (r"/options(?:\.json)?", Options),
     (r"/options/save", SaveOptions),
+    (r"/variables(?:\.json)?", Variables),
     (r"/state(?:\.json)?", State),
     (r"/processes", ProcessList),
     (r"/executable-icon", ProcessImage),

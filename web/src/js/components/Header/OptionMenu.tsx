@@ -57,8 +57,21 @@ export default function OptionMenu() {
                         >
                             Edit Options
                         </Button>
+                        &nbsp;
+                        <Button
+                            title="打开自定义变量配置弹窗"
+                            icon="braces"
+                            iconClassName="text-success"
+                            onClick={() =>
+                                dispatch(
+                                    modalActions.setActiveModal("VariablesModal"),
+                                )
+                            }
+                        >
+                            自定义变量配置
+                        </Button>
                     </div>
-                    <div className="menu-legend">Options Editor</div>
+                    <div className="menu-legend">配置与变量</div>
                 </div>
 
                 <div className="menu-group">

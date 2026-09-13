@@ -1,4 +1,4 @@
-import { combineReducers } from "redux";
+import { combineReducers } from "@reduxjs/toolkit";
 import flow from "./flow";
 import modal from "./modal";
 import optionsEditor from "./optionsEditor";

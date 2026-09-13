@@ -1,4 +1,4 @@
-import { combineReducers } from "redux";
+import { combineReducers } from "@reduxjs/toolkit";
 import regularReducer from "./modes/regular";
 import localReducer from "./modes/local";
 import wireguardReducer from "./modes/wireguard";

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import type { HTTPFlow, HTTPMessage } from "../../flow";
 import { useAppDispatch, useAppSelector } from "../../ducks";
 import { setContentViewFor } from "../../ducks/ui/flow";
@@ -22,12 +22,17 @@ type HttpMessageProps = {
 
 export default function HttpMessage({ flow, message }: HttpMessageProps) {
     const [isEdited, setIsEdited] = useState<boolean>(false);
+    const part = flow.request === message ? "request" : "response";
+    const contentView = useAppSelector(
+        (state) => state.ui.flow.contentViewFor[flow.id + part] || "Auto",
+    );
     if (isEdited) {
         return (
             <HttpMessageEdit
                 flow={flow}
                 message={message}
                 stopEdit={() => setIsEdited(false)}
+                contentView={contentView}
             />
         );
     } else {
@@ -45,28 +50,71 @@ type HttpMessageEditProps = {
     flow: HTTPFlow;
     message: HTTPMessage;
     stopEdit: () => void;
+    contentView?: string;
 };
 
-function HttpMessageEdit({ flow, message, stopEdit }: HttpMessageEditProps) {
+function HttpMessageEdit({
+    flow,
+    message,
+    stopEdit,
+    contentView = "Auto",
+}: HttpMessageEditProps) {
     const dispatch = useAppDispatch();
 
     const part = flow.request === message ? "request" : "response";
-    const url = MessageUtils.getContentURL(flow, message);
-    const content = useContent(url, message.contentHash);
+    const rawUrl = MessageUtils.getContentURL(flow, message);
+    const rawContent = useContent(rawUrl, message.contentHash);
+
+    const contentViewData = useContentView(
+        flow,
+        message,
+        contentView,
+        undefined,
+        message.contentHash,
+    );
+
+    const isInteractive = Boolean(
+        contentView.toLowerCase() !== "raw" && contentViewData?.interactive,
+    );
+
+    const initialContent = useMemo(() => {
+        if (isInteractive && contentViewData) {
+            return contentViewData.text;
+        }
+        return rawContent ?? "";
+    }, [isInteractive, contentViewData, rawContent]);
+
     const [editedContent, setEditedContent] = useState<string>();
 
     const save = async () => {
+        const payloadContent = editedContent ?? initialContent;
+        const updatePart: Record<string, any> = {
+            content: payloadContent,
+        };
+        if (isInteractive && contentViewData?.view_name) {
+            updatePart.view = contentViewData.view_name;
+        }
         await dispatch(
             flowActions.update(flow, {
-                [part]: { content: editedContent ?? content ?? "" },
+                [part]: updatePart,
             }),
         );
         stopEdit();
     };
+
     return (
-        <div className="contentview" key="edit">
+        <div
+            className="contentview"
+            key={isInteractive ? `edit-${contentViewData?.view_name}` : "edit-raw"}
+        >
             <div className="controls">
-                <h5>[Editing]</h5>
+                <h5>
+                    [Editing
+                    {isInteractive && contentViewData
+                        ? ` (${contentViewData.view_name})`
+                        : ""}
+                    ]
+                </h5>
                 <Button
                     onClick={save}
                     icon="confirm"
@@ -86,7 +134,7 @@ function HttpMessageEdit({ flow, message, stopEdit }: HttpMessageEditProps) {
                 </Button>
             </div>
             <CodeEditor
-                initialContent={content || ""}
+                initialContent={initialContent}
                 onChange={setEditedContent}
             />
         </div>

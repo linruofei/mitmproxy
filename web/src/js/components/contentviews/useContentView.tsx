@@ -8,6 +8,7 @@ export type ContentViewData = {
     view_name: string;
     syntax_highlight: string;
     description: string;
+    interactive?: boolean;
     from_client?: boolean;
     timestamp?: number;
 };

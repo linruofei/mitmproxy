@@ -12,6 +12,7 @@ from tornado import websocket
 from tornado.web import create_signed_value
 
 import mitmproxy_rs
+from mitmproxy import contentviews
 from mitmproxy import log
 from mitmproxy import options
 from mitmproxy.test import tflow
@@ -262,6 +263,39 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
         assert f.response.http_version == "2.0"
         f.revert()
 
+    def test_flow_update_with_interactive_view(self):
+        class MockInteractiveView(contentviews.InteractiveContentview):
+            name = "mock_interactive"
+
+            def prettify(self, data: bytes, metadata: contentviews.Metadata) -> str:
+                return data.decode().upper()
+
+            def reencode(self, prettified: str, metadata: contentviews.Metadata) -> bytes:
+                return prettified.lower().encode()
+
+        mock_cv = MockInteractiveView()
+        contentviews.registry.register(mock_cv)
+        try:
+            f = self.view.get_by_id("42")
+            f.backup()
+
+            res = get_json(self.fetch("/flows/42/request/content/mock_interactive"))
+            assert res["interactive"] is True
+            assert res["text"] == "FOO\nBAR"
+
+            upd = {
+                "request": {
+                    "content": "HELLO WORLD",
+                    "view": "mock_interactive",
+                }
+            }
+            assert self.put_json("/flows/42", upd).code == 200
+            assert f.request.content == b"hello world"
+
+            f.revert()
+        finally:
+            contentviews.registry._by_name.pop(mock_cv.name.lower(), None)
+
     def test_flow_duplicate(self):
         resp = self.fetch("/flows/42/duplicate", method="POST")
         assert resp.code == 200
@@ -355,6 +389,34 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
         assert f.request.content == b"such multipart. very wow."
         assert f.modified()
         f.revert()
+
+    def test_variables(self):
+        import tempfile
+        import mitmproxy.user_variables as uv
+
+        orig_config = uv.CONFIG_FILE
+        orig_cache = dict(uv._cache)
+        orig_mtime = uv._last_mtime
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                uv.CONFIG_FILE = Path(td) / "custom_variables.json"
+                uv._cache = {}
+                uv._last_mtime = 0.0
+
+                resp = self.fetch("/variables")
+                assert resp.code == 200
+
+                data = {"test_var": "hello", "nested": {"a": 1}}
+                put_resp = self.put_json("/variables", data)
+                assert put_resp.code == 200
+                assert get_json(put_resp) == data
+
+                get_resp = self.fetch("/variables")
+                assert get_json(get_resp) == data
+            finally:
+                uv.CONFIG_FILE = orig_config
+                uv._cache = orig_cache
+                uv._last_mtime = orig_mtime
 
     def test_flow_contentview(self):
         assert get_json(self.fetch("/flows/42/request/content/raw")) == {
