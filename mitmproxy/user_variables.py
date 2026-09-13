@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 CONFIG_FILE = Path("custom_variables.json").resolve()
 
+# 默认初始配置模板：当 custom_variables.json 不存在时，自动以此空对象初始化创建
+DEFAULT_CONFIG: dict[str, Any] = {}
+
 _cache: dict[str, Any] = {}
 _last_mtime: float = 0.0
 
@@ -15,6 +18,16 @@ _last_mtime: float = 0.0
 def _load_from_disk() -> dict[str, Any]:
     global _cache, _last_mtime
     if not CONFIG_FILE.exists():
+        try:
+            CONFIG_FILE.write_text(
+                json.dumps(DEFAULT_CONFIG, indent=4, ensure_ascii=False), encoding="utf-8"
+            )
+            _cache = dict(DEFAULT_CONFIG)
+            _last_mtime = CONFIG_FILE.stat().st_mtime
+            logger.info(f"Initialized {CONFIG_FILE} with default template.")
+        except Exception as e:
+            logger.warning(f"Failed to auto-create {CONFIG_FILE}: {e}")
+            _cache = dict(DEFAULT_CONFIG)
         return _cache
     try:
         mtime = CONFIG_FILE.stat().st_mtime
