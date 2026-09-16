@@ -124,7 +124,14 @@ path.headerName = "Path";
 
 export const method: FlowColumn = ({ flow }) => (
     <td className="col-method">
-        <Badge className="method-badge">{getMethod(flow)}</Badge>
+        <Badge
+            className={classnames("method-badge", {
+                "method-mock": flow.is_mock,
+            })}
+            title={flow.is_mock ? `命中模拟数据: ${flow.mock_rule_name || "Mock"}` : undefined}
+        >
+            {getMethod(flow)}
+        </Badge>
     </td>
 );
 method.headerName = "Method";

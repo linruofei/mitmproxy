@@ -5,6 +5,7 @@ import Button from "../common/Button";
 import { update as updateOptions } from "../../ducks/options";
 import { useAppDispatch, useAppSelector } from "../../ducks";
 import { FilterName, setFilter, setHighlight } from "../../ducks/ui/filter";
+import { setActiveModal } from "../../ducks/ui/modal";
 
 FlowListMenu.title = "Flow List";
 
@@ -77,14 +78,25 @@ function HighlightInput() {
 export function ResumeAll() {
     const dispatch = useAppDispatch();
     return (
-        <Button
-            className="btn-sm"
-            title="[a]ccept all"
-            icon="resumeAll"
-            iconClassName="text-success"
-            onClick={() => dispatch(flowsActions.resumeAll())}
-        >
-            Resume All
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Button
+                className="btn-sm"
+                title="[a]ccept all"
+                icon="resumeAll"
+                iconClassName="text-success"
+                onClick={() => dispatch(flowsActions.resumeAll())}
+            >
+                Resume All
+            </Button>
+            <Button
+                className="btn-sm"
+                title="拦截与返回规则管理"
+                icon="pause"
+                iconClassName="text-warning"
+                onClick={() => dispatch(setActiveModal("RulesModal"))}
+            >
+                拦截管理
+            </Button>
+        </div>
     );
 }

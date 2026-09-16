@@ -33,3 +33,4 @@ web/coverage/
 .mypy_cache/
 .pnpm-store/
 custom_variables.json
+mock_files/

@@ -29,11 +29,13 @@ from mitmproxy.addons import strip_dns_https_records
 from mitmproxy.addons import tlsconfig
 from mitmproxy.addons import update_alt_svc
 from mitmproxy.addons import upstream_auth
+from mitmproxy import intercept_rules
 
 
 def default_addons():
     return [
         core.Core(),
+        intercept_rules.RuleDispatcher(),
         browser.Browser(),
         block.Block(),
         strip_dns_https_records.StripDnsHttpsRecords(),

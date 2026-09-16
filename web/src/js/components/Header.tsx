@@ -11,11 +11,18 @@ import FlowMenu from "./Header/FlowMenu";
 import type { Menu } from "./ProxyApp";
 import { Tab, setCurrent } from "../ducks/ui/tabs";
 
-const tabs: { [key in Tab]: Menu } = {
+const tabs: { [key in Tab]?: Menu } = {
     [Tab.Capture]: CaptureMenu,
     [Tab.FlowList]: FlowListMenu,
     [Tab.Options]: OptionMenu,
     [Tab.Flow]: FlowMenu,
+};
+
+const tabTitles: { [key in Tab]: string } = {
+    [Tab.Capture]: "Capture",
+    [Tab.FlowList]: "Flow List",
+    [Tab.Options]: "Options",
+    [Tab.Flow]: "Flow",
 };
 
 export default function Header() {
@@ -32,7 +39,6 @@ export default function Header() {
     // Switch to "Flow" tab if we just selected a new flow.
     useEffect(() => {
         if (selectedFlows.length > 0 && !wasFlowSelected) {
-            // User just clicked on a flow without having previously selected one.
             dispatch(setCurrent(Tab.Flow));
             setWasFlowSelected(true);
         } else if (selectedFlows.length === 0) {
@@ -63,16 +69,16 @@ export default function Header() {
                         className={classnames({ active: tab === currentTab })}
                         onClick={(e) => handleClick(tab, e)}
                     >
-                        {tabs[tab].title}
+                        {tabTitles[tab]}
                     </a>
                 ))}
-                <HideInStatic>
-                    <ConnectionIndicator />
-                </HideInStatic>
             </nav>
-            <div>
-                <ActiveMenu />
-            </div>
+            {ActiveMenu && (
+                <div className="menu">
+                    <ActiveMenu />
+                </div>
+            )}
+            <ConnectionIndicator />
         </header>
     );
 }

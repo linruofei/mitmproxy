@@ -69,10 +69,18 @@
             }
         }
 
-        &.highlighted {
-            background-color: var(--mitmweb-row-highlight);
+        &.is-mock {
+            // 使用 solid 不透明颜色：通过 color-mix 将底色与紫色混合，确保 quickactions inherit 时不产生重叠透光
+            background-color: color-mix(in srgb, var(--mitmweb-bg) 80%, #8e44ad) !important;
             &:nth-child(even) {
-                background-color: var(--mitmweb-row-highlight-alt);
+                background-color: color-mix(in srgb, var(--mitmweb-bg-alt) 76%, #8e44ad) !important;
+            }
+        }
+
+        &.highlighted {
+            background-color: var(--mitmweb-row-highlight) !important;
+            &:nth-child(even) {
+                background-color: var(--mitmweb-row-highlight-alt) !important;
             }
         }
 

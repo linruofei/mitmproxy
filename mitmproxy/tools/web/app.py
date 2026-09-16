@@ -10,6 +10,7 @@ import os.path
 import re
 import secrets
 import sys
+import time
 from collections.abc import Callable
 from collections.abc import Sequence
 from io import BytesIO
@@ -36,6 +37,7 @@ from mitmproxy import io
 from mitmproxy import log
 from mitmproxy import optmanager
 from mitmproxy import user_variables
+from mitmproxy import intercept_rules
 from mitmproxy import version
 from mitmproxy.dns import DNSFlow
 from mitmproxy.http import HTTPFlow
@@ -91,6 +93,8 @@ def flow_to_json(flow: mitmproxy.flow.Flow) -> dict:
         "id": flow.id,
         "intercepted": flow.intercepted,
         "is_replay": flow.is_replay,
+        "is_mock": flow.metadata.get("is_mock", False),
+        "mock_rule_name": flow.metadata.get("mock_rule_name", ""),
         "type": flow.type,
         "modified": flow.modified(),
         "marked": emoji.get(flow.marked, "🔴") if flow.marked else "",
@@ -467,9 +471,13 @@ class ClientConnection(WebSocketEventBroadcaster):
 
     def update_filter(self, name: str, expr: str) -> None:
         if expr:
-            filt = flowfilter.parse(expr)
-            self.filters[name] = filt
-            matching_flow_ids = [f.id for f in self.application.master.view if filt(f)]
+            try:
+                filt = flowfilter.parse(expr)
+                self.filters[name] = filt
+                matching_flow_ids = [f.id for f in self.application.master.view if filt(f)]
+            except ValueError:
+                # 过滤表达式可能在输入过程中暂不完整（如单引号未闭合），优雅忽略而非断开连接
+                return
         else:
             self.filters.pop(name, None)
             matching_flow_ids = None
@@ -880,6 +888,87 @@ class Variables(RequestHandler):
         self.write(user_variables.get_all())
 
 
+class InterceptRulesHandler(RequestHandler):
+    def get(self):
+        rules = intercept_rules.get_all_rules()
+        handlers = intercept_rules.get_available_handler_names()
+        self.write({"rules": rules, "handlers": handlers})
+
+    def put(self):
+        body = self.json
+        if not isinstance(body, (list, dict)):
+            raise APIError(400, "Expected a list of rules or an object with rules property.")
+        rules = body.get("rules") if isinstance(body, dict) else body
+        if not isinstance(rules, list):
+            raise APIError(400, "Rules must be a list.")
+        try:
+            intercept_rules.save_all_rules(rules)
+        except Exception as err:
+            raise APIError(500, f"Failed to save intercept rules: {err}")
+        self.write({
+            "rules": intercept_rules.get_all_rules(),
+            "handlers": intercept_rules.get_available_handler_names(),
+        })
+
+
+class InterceptRuleToggleHandler(RequestHandler):
+    def post(self, rule_id: str):
+        enabled = None
+        if isinstance(self.json, dict) and "enabled" in self.json:
+            enabled = bool(self.json["enabled"])
+        res = intercept_rules.toggle_rule(rule_id, enabled)
+        if res is None:
+            raise APIError(404, f"Rule with id {rule_id} not found.")
+        self.write({
+            "rule": res,
+            "rules": intercept_rules.get_all_rules(),
+            "handlers": intercept_rules.get_available_handler_names(),
+        })
+
+
+class MockFilesHandler(RequestHandler):
+    def get(self):
+        files = intercept_rules.list_server_mock_files()
+        self.write({"files": files})
+
+    def post(self):
+        # 接收上传文件 (支持 multipart/form-data 或直接二进制 body)
+        filename = self.get_query_argument("filename", "")
+        file_bytes = b""
+
+        if self.request.files and "file" in self.request.files:
+            uploaded = self.request.files["file"][0]
+            filename = filename or uploaded.get("filename", f"file_{int(time.time())}")
+            file_bytes = uploaded.get("body", b"")
+        elif self.request.body:
+            filename = filename or f"file_{int(time.time())}"
+            file_bytes = self.request.body
+        else:
+            raise APIError(400, "No file uploaded.")
+
+        try:
+            saved = intercept_rules.save_server_mock_file(filename, file_bytes)
+        except Exception as e:
+            raise APIError(500, f"Failed to save file: {e}")
+
+        self.write({
+            "uploaded": saved,
+            "files": intercept_rules.list_server_mock_files(),
+        })
+
+    def delete(self):
+        filename = self.get_query_argument("filename", "")
+        if not filename:
+            raise APIError(400, "Missing filename argument.")
+        deleted = intercept_rules.delete_server_mock_file(filename)
+        if not deleted:
+            raise APIError(404, f"File {filename} not found.")
+        self.write({
+            "deleted": filename,
+            "files": intercept_rules.list_server_mock_files(),
+        })
+
+
 class State(RequestHandler):
     # Separate method for testability.
     @staticmethod
@@ -966,6 +1055,9 @@ handlers = [
     (r"/options(?:\.json)?", Options),
     (r"/options/save", SaveOptions),
     (r"/variables(?:\.json)?", Variables),
+    (r"/intercept_rules(?:\.json)?", InterceptRulesHandler),
+    (r"/intercept_rules/(?P<rule_id>[^/]+)/toggle", InterceptRuleToggleHandler),
+    (r"/mock_files", MockFilesHandler),
     (r"/state(?:\.json)?", State),
     (r"/processes", ProcessList),
     (r"/executable-icon", ProcessImage),

@@ -14,6 +14,7 @@ type CodeEditorProps = {
     onChange: (content: string) => void;
     readonly?: boolean;
     language?: SyntaxHighlight | null;
+    height?: string;
 };
 
 export default function CodeEditor({
@@ -21,6 +22,7 @@ export default function CodeEditor({
     onChange,
     language,
     readonly = false,
+    height,
 }: CodeEditorProps) {
     const resolvedTheme = useResolvedTheme();
     const stopPropagation = useCallback(
@@ -60,6 +62,7 @@ export default function CodeEditor({
                 onChange={onChange}
                 readOnly={readonly}
                 extensions={extensions}
+                height={height}
                 theme={resolvedTheme === "dark" ? oneDark : "light"}
             />
         </div>

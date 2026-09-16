@@ -5,6 +5,8 @@ interface _Flow {
     id: string;
     intercepted: boolean;
     is_replay: "request" | "response" | undefined;
+    is_mock?: boolean;
+    mock_rule_name?: string;
     type: string;
     modified: boolean;
     marked: string;
