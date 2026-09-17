@@ -72,13 +72,15 @@ export default function Header() {
                         {tabTitles[tab]}
                     </a>
                 ))}
+                <HideInStatic>
+                    <ConnectionIndicator />
+                </HideInStatic>
             </nav>
             {ActiveMenu && (
                 <div className="menu">
                     <ActiveMenu />
                 </div>
             )}
-            <ConnectionIndicator />
         </header>
     );
 }
