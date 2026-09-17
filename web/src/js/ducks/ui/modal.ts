@@ -1,18 +1,32 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-const defaultState: { activeModal: string | undefined } = {
+const defaultState: {
+    activeModal: string | undefined;
+    modalData?: any;
+} = {
     activeModal: undefined,
+    modalData: undefined,
 };
 
 const modalSlice = createSlice({
     name: "ui/modal",
     initialState: defaultState,
     reducers: {
-        setActiveModal(state, action) {
-            state.activeModal = action.payload;
+        setActiveModal(
+            state,
+            action: PayloadAction<string | { name: string; data?: any }>
+        ) {
+            if (typeof action.payload === "string") {
+                state.activeModal = action.payload;
+                state.modalData = undefined;
+            } else {
+                state.activeModal = action.payload.name;
+                state.modalData = action.payload.data;
+            }
         },
         hideModal(state) {
             state.activeModal = undefined;
+            state.modalData = undefined;
         },
     },
 });

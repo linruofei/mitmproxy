@@ -255,6 +255,12 @@ class RuleDispatcher:
                 if phase in ("response", "both"):
                     f.intercept()
                     return
+            elif action == "delay":
+                delay_ms = max(0, int(rule.get("delay_ms", 0)))
+                if delay_ms > 0:
+                    import time
+                    time.sleep(delay_ms / 1000.0)
+                return
 
     def _handle_mock(self, f: http.HTTPFlow, rule: dict[str, Any]) -> None:
         mock_cfg = rule.get("mock_config", {})

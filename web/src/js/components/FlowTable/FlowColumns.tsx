@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import React, { type JSX } from "react";
 import { useAppDispatch } from "../../ducks";
+import { setActiveModal } from "../../ducks/ui/modal";
 import classnames from "classnames";
 import type { ResourceType, sortFunctions } from "../../flow/utils";
 import {
@@ -190,6 +191,7 @@ export const quickactions: FlowColumn = ({ flow }) => {
             <a
                 href="#"
                 className="quickaction"
+                title="放行 (Resume)"
                 onClick={() => dispatch(flowActions.resume([flow]))}
             >
                 <Icon name="resume" className="text-success" />
@@ -200,6 +202,7 @@ export const quickactions: FlowColumn = ({ flow }) => {
             <a
                 href="#"
                 className="quickaction"
+                title="重放 (Replay)"
                 onClick={() => dispatch(flowActions.replay([flow]))}
             >
                 <Icon name="replay" className="text-primary" />
@@ -207,9 +210,31 @@ export const quickactions: FlowColumn = ({ flow }) => {
         );
     }
 
+    const onAddRule = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const url = mainPath(flow);
+        dispatch(
+            setActiveModal({
+                name: "RulesModal",
+                data: { initialUrl: url },
+            })
+        );
+    };
+
     return (
         <td className="col-quickactions">
-            {resume_or_replay ? <div>{resume_or_replay}</div> : <></>}
+            <div>
+                <a
+                    href="#"
+                    className="quickaction"
+                    title="截停/添加拦截规则"
+                    onClick={onAddRule}
+                >
+                    <Icon name="hand" className="text-warning" />
+                </a>
+                {resume_or_replay}
+            </div>
         </td>
     );
 };

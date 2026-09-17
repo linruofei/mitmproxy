@@ -694,6 +694,49 @@ select.input {
     padding-right: 24px;
 }
 
+// 悬停在帮助图标上时，将 Tooltip 显示在问号正上方并居中，绝对不被鼠标光标挡住
+.help-tooltip-trigger {
+    .help-tooltip-bubble {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%) translateY(-6px);
+        background-color: rgba(20, 24, 30, 0.92);
+        color: #ffffff;
+        text-align: center;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 11.5px;
+        font-weight: 400;
+        line-height: 1.4;
+        white-space: nowrap;
+        z-index: 1000;
+        pointer-events: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        transition: opacity 0.15s ease, transform 0.15s ease;
+
+        // 向下的小三角形小角标
+        &::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 4px;
+            border-style: solid;
+            border-color: rgba(20, 24, 30, 0.92) transparent transparent transparent;
+        }
+    }
+
+    &:hover .help-tooltip-bubble {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-50%) translateY(-8px);
+    }
+}
+
 textarea.input {
     height: auto;
 }

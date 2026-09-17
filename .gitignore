@@ -34,3 +34,4 @@ web/coverage/
 .pnpm-store/
 custom_variables.json
 mock_files/
+intercept_rules.json

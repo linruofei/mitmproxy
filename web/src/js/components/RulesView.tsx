@@ -3,7 +3,7 @@ import Button from "./common/Button";
 import Icon from "./common/Icon";
 import CodeEditor from "./contentviews/CodeEditor";
 import { fetchApi } from "../utils";
-import { useAppDispatch } from "../ducks";
+import { useAppDispatch, useAppSelector } from "../ducks";
 import { hideModal } from "../ducks/ui/modal";
 
 export type InterceptRule = {
@@ -11,8 +11,9 @@ export type InterceptRule = {
     name: string;
     enabled: boolean;
     filter: string;
-    action: "breakpoint" | "mock";
+    action: "breakpoint" | "mock" | "delay";
     intercept_phase?: "request" | "response" | "both";
+    delay_ms?: number;
     mock_config?: {
         status_code?: number;
         headers?: Record<string, string>;
@@ -79,6 +80,7 @@ const guessContentType = (filename: string): string => {
 
 export default function RulesView() {
     const dispatch = useAppDispatch();
+    const modalData = useAppSelector((state) => state.ui.modal.modalData);
     const [rules, setRules] = useState<InterceptRule[]>([]);
     const [availableHandlers, setAvailableHandlers] = useState<string[]>([]);
     const [serverFiles, setServerFiles] = useState<ServerMockFile[]>([]);
@@ -114,6 +116,42 @@ export default function RulesView() {
     useEffect(() => {
         loadRules();
         loadServerFiles();
+
+        // 如果是通过 flow 上的“添加拦截规则”打开，自动直接进入新建/编辑视图，并预填去掉参数后的完整请求路径
+        if (modalData?.initialUrl) {
+            const url = modalData.initialUrl;
+            let fullUrlWithoutQuery = url;
+            let pathNameOnly = url;
+            try {
+                // 如果是标准完整 URL (http://... 或 https://...)
+                const parsed = new URL(url);
+                fullUrlWithoutQuery = `${parsed.origin}${parsed.pathname}`;
+                pathNameOnly = parsed.pathname || url;
+            } catch {
+                // 如果没有 scheme，或者只是 host/path 形式，截断问号及之后 Query 参数
+                fullUrlWithoutQuery = url.split("?")[0];
+                const parts = fullUrlWithoutQuery.split("/");
+                pathNameOnly = parts.length > 1 ? "/" + parts.slice(1).join("/") : fullUrlWithoutQuery;
+            }
+
+            setEditingRule({
+                id: "rule_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+                name: pathNameOnly,
+                enabled: true,
+                filter: fullUrlWithoutQuery,
+                action: "breakpoint",
+                intercept_phase: "both",
+                mock_config: {
+                    status_code: 200,
+                    data_source: "inline",
+                    file_path: "",
+                    body: "{\n  \"code\": 0\n}",
+                    processor_type: "raw",
+                    script_handler: "",
+                },
+            });
+        }
+
         return () => {
             if (toastTimerRef.current) {
                 clearTimeout(toastTimerRef.current);
@@ -428,7 +466,7 @@ export default function RulesView() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Icon name="pause" style={{ fontSize: 18, color: "var(--mitmweb-accent)" }} />
                     <h4 style={{ margin: 0, fontWeight: 600, color: "var(--mitmweb-fg-strong)" }}>
-                        多项拦截与数据返回规则
+                        拦截管理
                     </h4>
                     <span style={{ fontSize: 12, color: "var(--mitmweb-fg-muted)", marginLeft: 4 }}>
                         (共 {rules.length} 条规则)
@@ -587,7 +625,7 @@ export default function RulesView() {
                                         setEditingRule({ ...editingRule, action: "breakpoint" })
                                     }
                                 />
-                                <span style={{ fontWeight: 500 }}>人工断点拦截</span>
+                                <span style={{ fontWeight: 500 }}>断点拦截</span>
                             </label>
                             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                                 <input
@@ -604,17 +642,78 @@ export default function RulesView() {
                                                 file_path: "",
                                                 body: "{\n  \"code\": 0\n}",
                                                 processor_type: "raw",
-                                                script_handler: availableHandlers[0] || "",
+                                                script_handler: "",
                                             },
                                         })
                                     }
                                 />
-                                <span style={{ fontWeight: 500 }}>自动返回数据</span>
+                                <span style={{ fontWeight: 500 }}>模拟响应</span>
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                                <input
+                                    type="radio"
+                                    name="rule_action"
+                                    checked={editingRule.action === "delay"}
+                                    onChange={() =>
+                                        setEditingRule({
+                                            ...editingRule,
+                                            action: "delay",
+                                            delay_ms: editingRule.delay_ms !== undefined ? editingRule.delay_ms : 1000,
+                                        })
+                                    }
+                                />
+                                <span style={{ fontWeight: 500 }}>响应延迟</span>
                             </label>
                         </div>
                     </div>
 
-                    {/* 1. 如果是断点模式：同时拦截请求和响应 放在最前面 */}
+                    {/* 1. 如果是响应延迟模式 */}
+                    {editingRule.action === "delay" && (
+                        <div
+                            style={{
+                                padding: "14px",
+                                borderRadius: 6,
+                                border: "1px solid var(--mitmweb-border)",
+                                background: "var(--mitmweb-bg)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 10,
+                            }}
+                        >
+                            <label style={{ fontSize: 12.5, fontWeight: 600, color: "var(--mitmweb-fg)" }}>
+                                延迟时间 (毫秒)
+                            </label>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    min={0}
+                                    step={100}
+                                    placeholder="例如: 1000"
+                                    value={editingRule.delay_ms ?? 1000}
+                                    style={{
+                                        width: 160,
+                                        height: 32,
+                                        border: "1px solid var(--mitmweb-border)",
+                                        borderRadius: 4,
+                                        background: "var(--mitmweb-bg)",
+                                        color: "var(--mitmweb-fg)",
+                                    }}
+                                    onChange={(e) =>
+                                        setEditingRule({
+                                            ...editingRule,
+                                            delay_ms: Math.max(0, parseInt(e.target.value, 10) || 0),
+                                        })
+                                    }
+                                />
+                                <span style={{ fontSize: 12, color: "var(--mitmweb-fg-muted)" }}>
+                                    毫秒 (ms) —— 相当于 {((editingRule.delay_ms ?? 1000) / 1000).toFixed(2)} 秒后返回响应
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. 如果是断点模式：同时拦截请求和响应 放在最前面 */}
                     {editingRule.action === "breakpoint" && (
                         <div
                             style={{
@@ -640,7 +739,7 @@ export default function RulesView() {
                                             setEditingRule({ ...editingRule, intercept_phase: "both" })
                                         }
                                     />
-                                    <span>同时拦截请求和响应</span>
+                                    <span>拦截请求和响应</span>
                                 </label>
                                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                                     <input
@@ -668,7 +767,7 @@ export default function RulesView() {
                         </div>
                     )}
 
-                    {/* 2. 如果是自动返回数据 (Mock) 模式 */}
+                    {/* 3. 如果是模拟响应 (Mock) 模式 */}
                     {editingRule.action === "mock" && (
                         <div
                             style={{
@@ -711,123 +810,79 @@ export default function RulesView() {
                                 </div>
 
                                 <div>
-                                    <label style={{ fontSize: 12.5, fontWeight: 600, color: "var(--mitmweb-fg)" }}>
-                                        处理类型
-                                    </label>
-                                    <div style={{ display: "flex", gap: 18, marginTop: 6 }}>
-                                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                                            <input
-                                                type="radio"
-                                                name="processor_type"
-                                                checked={editingRule.mock_config?.processor_type !== "script"}
-                                                onChange={() =>
-                                                    setEditingRule({
-                                                        ...editingRule,
-                                                        mock_config: {
-                                                            ...editingRule.mock_config,
-                                                            processor_type: "raw",
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                            <span>原生直接返回</span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <label style={{ fontSize: 12.5, fontWeight: 600, color: "var(--mitmweb-fg)", margin: 0 }}>
+                                            数据处理方法
                                         </label>
-                                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                                            <input
-                                                type="radio"
-                                                name="processor_type"
-                                                checked={editingRule.mock_config?.processor_type === "script"}
-                                                onChange={() =>
-                                                    setEditingRule({
-                                                        ...editingRule,
-                                                        mock_config: {
-                                                            ...editingRule.mock_config,
-                                                            processor_type: "script",
-                                                            script_handler:
-                                                                editingRule.mock_config?.script_handler ||
-                                                                (availableHandlers[0] || ""),
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                            <span>调用脚本特定方法</span>
-                                        </label>
+                                        <span
+                                            className="help-tooltip-trigger"
+                                            style={{
+                                                position: "relative",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                cursor: "help",
+                                                color: "var(--mitmweb-fg-muted)",
+                                            }}
+                                        >
+                                            <Icon name="help" size={13} />
+                                            <span className="help-tooltip-bubble">
+                                                读取加载脚本中以 rsp_ 开头的方法
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                                        <select
+                                            className="input"
+                                            value={
+                                                editingRule.mock_config?.processor_type === "script" &&
+                                                editingRule.mock_config?.script_handler
+                                                    ? editingRule.mock_config.script_handler
+                                                    : ""
+                                            }
+                                            style={{
+                                                height: 34,
+                                                lineHeight: "22px",
+                                                paddingTop: 4,
+                                                paddingBottom: 4,
+                                                width: "100%",
+                                                fontFamily: "monospace, 'Consolas', 'Courier New', sans-serif",
+                                                fontSize: 12.5,
+                                                border: "1px solid var(--mitmweb-border)",
+                                                borderRadius: 4,
+                                                background: "var(--mitmweb-bg)",
+                                                color: "var(--mitmweb-fg)",
+                                                boxSizing: "border-box",
+                                            }}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditingRule({
+                                                    ...editingRule,
+                                                    mock_config: {
+                                                        ...editingRule.mock_config,
+                                                        processor_type: val ? "script" : "raw",
+                                                        script_handler: val,
+                                                    },
+                                                });
+                                            }}
+                                        >
+                                            <option value="">无 (直接返回数据内容)</option>
+                                            {availableHandlers.map((h) => (
+                                                <option key={h} value={h}>
+                                                    {h}
+                                                </option>
+                                            ))}
+                                            {/* 如果当前规则配置了某个自定义函数，但不在已检测列表里，也保留显示 */}
+                                            {editingRule.mock_config?.script_handler &&
+                                                !availableHandlers.includes(editingRule.mock_config.script_handler) && (
+                                                    <option value={editingRule.mock_config.script_handler}>
+                                                        {editingRule.mock_config.script_handler}
+                                                    </option>
+                                                )}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* 脚本处理函数 */}
-                            {editingRule.mock_config?.processor_type === "script" && (
-                                <div
-                                    style={{
-                                        background: "var(--mitmweb-bg-alt)",
-                                        padding: "10px 12px",
-                                        borderRadius: 4,
-                                        border: "1px dashed var(--mitmweb-border)",
-                                    }}
-                                >
-                                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--mitmweb-accent)" }}>
-                                        指定处理函数 (仅读取加载脚本中以 rsp_ 开头的方法):
-                                    </label>
-                                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                                        {availableHandlers.length > 0 ? (
-                                            <select
-                                                className="input"
-                                                value={editingRule.mock_config?.script_handler || ""}
-                                                style={{
-                                                    height: 32,
-                                                    border: "1px solid var(--mitmweb-border)",
-                                                    borderRadius: 4,
-                                                    background: "var(--mitmweb-bg)",
-                                                    color: "var(--mitmweb-fg)",
-                                                }}
-                                                onChange={(e) =>
-                                                    setEditingRule({
-                                                        ...editingRule,
-                                                        mock_config: {
-                                                            ...editingRule.mock_config,
-                                                            script_handler: e.target.value,
-                                                        },
-                                                    })
-                                                }
-                                            >
-                                                {availableHandlers.map((h) => (
-                                                    <option key={h} value={h}>
-                                                        {h}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                className="input"
-                                                placeholder="输入以 rsp_ 开头的方法名"
-                                                value={editingRule.mock_config?.script_handler || ""}
-                                                style={{
-                                                    height: 32,
-                                                    fontFamily: "monospace",
-                                                    border: "1px solid var(--mitmweb-border)",
-                                                    borderRadius: 4,
-                                                    background: "var(--mitmweb-bg)",
-                                                    color: "var(--mitmweb-fg)",
-                                                }}
-                                                onChange={(e) =>
-                                                    setEditingRule({
-                                                        ...editingRule,
-                                                        mock_config: {
-                                                            ...editingRule.mock_config,
-                                                            script_handler: e.target.value,
-                                                        },
-                                                    })
-                                                }
-                                            />
-                                        )}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: "var(--mitmweb-fg-muted)", marginTop: 4 }}>
-                                        签名支持 <code>def rsp_xxx(flow, raw_body)</code>，可在方法内进行动态加密、签名或数据篡改。
-                                    </div>
-                                </div>
-                            )}
 
                             {/* 响应头配置面板：可折叠展示，并支持预设与自由编辑 */}
                             <div
@@ -1005,7 +1060,16 @@ export default function RulesView() {
                                                                     type="button"
                                                                     className="btn btn-default btn-xs"
                                                                     title="删除此 Header"
-                                                                    style={{ color: "var(--mitmweb-danger)", padding: "2px 6px" }}
+                                                                    style={{
+                                                                        color: "var(--mitmweb-danger)",
+                                                                        padding: 0,
+                                                                        width: 28,
+                                                                        height: 28,
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        justifyContent: "center",
+                                                                        flexShrink: 0,
+                                                                    }}
                                                                     onClick={() => {
                                                                         const newObj: Record<string, string> = {};
                                                                         entries.forEach(([k, v], i) => {
@@ -1022,7 +1086,7 @@ export default function RulesView() {
                                                                         });
                                                                     }}
                                                                 >
-                                                                    <Icon name="close" size={11} />
+                                                                    <Icon name="close" size={12} />
                                                                 </button>
                                                             </div>
                                                         ))}
@@ -1395,7 +1459,13 @@ export default function RulesView() {
                         <button
                             type="button"
                             className="btn btn-default btn-sm"
-                            onClick={() => setEditingRule(null)}
+                            onClick={() => {
+                                if (modalData?.initialUrl) {
+                                    dispatch(hideModal());
+                                } else {
+                                    setEditingRule(null);
+                                }
+                            }}
                         >
                             取消
                         </button>
@@ -1444,7 +1514,7 @@ export default function RulesView() {
                                     匹配条件
                                 </th>
                                 <th style={{ width: "38%", minWidth: 260, padding: "10px 14px", color: "var(--mitmweb-fg-strong)", fontWeight: 600, verticalAlign: "middle" }}>
-                                    执行动作与处理
+                                    执行动作
                                 </th>
                                 <th style={{ width: 120, textAlign: "center", padding: "10px 14px", color: "var(--mitmweb-fg-strong)", fontWeight: 600, verticalAlign: "middle" }}>
                                     操作
@@ -1478,7 +1548,7 @@ export default function RulesView() {
                                         </td>
 
                                         {/* 名称 */}
-                                        <td style={{ verticalAlign: "middle", padding: "10px 14px", fontWeight: 600, color: "var(--mitmweb-fg-strong)" }}>
+                                        <td style={{ verticalAlign: "middle", padding: "10px 14px", fontWeight: 600, color: "var(--mitmweb-fg-strong)", wordBreak: "break-all", overflowWrap: "anywhere" }}>
                                             {rule.name}
                                         </td>
 
@@ -1525,6 +1595,40 @@ export default function RulesView() {
                                                               : "请求与响应"}
                                                     </span>
                                                 </div>
+                                            ) : rule.action === "delay" ? (
+                                                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                                                    <span
+                                                        style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            gap: 5,
+                                                            padding: "3px 8px",
+                                                            borderRadius: 4,
+                                                            fontSize: 12,
+                                                            fontWeight: 500,
+                                                            background: "var(--mitmweb-info-soft-bg)",
+                                                            color: "var(--mitmweb-info-soft-fg)",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        <Icon name="revert" size={12} /> 响应延迟
+                                                    </span>
+                                                    <span
+                                                        style={{
+                                                            padding: "2px 7px",
+                                                            borderRadius: 4,
+                                                            fontSize: 11.5,
+                                                            fontFamily: "monospace",
+                                                            background: "var(--mitmweb-bg-alt)",
+                                                            border: "1px solid var(--mitmweb-border)",
+                                                            color: "var(--mitmweb-fg-strong)",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {rule.delay_ms ?? 1000} ms (
+                                                        {(((rule.delay_ms ?? 1000) / 1000)).toFixed(2)}s)
+                                                    </span>
+                                                </div>
                                             ) : (
                                                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                                                     {/* 主标签行：绝不换行 */}
@@ -1544,7 +1648,7 @@ export default function RulesView() {
                                                                 flexShrink: 0,
                                                             }}
                                                         >
-                                                            <Icon name="resume" size={12} /> 模拟返回
+                                                            <Icon name="resume" size={12} /> 模拟响应
                                                         </span>
 
                                                         {/* 状态码徽章 */}
