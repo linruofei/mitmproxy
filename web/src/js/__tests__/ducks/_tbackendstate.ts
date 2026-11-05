@@ -53,6 +53,12 @@ export function TBackendState(): Required<BackendStateExtra> {
                 "type": "tun"
             }
         },
+        "systemMetrics": {
+            "cpu": 12.5,
+            "mem_pct": 45.0,
+            "mem_total_mb": 1000,
+            "mem_used_mb": 450
+        },
         "version": "1.2.3"
     }
 }

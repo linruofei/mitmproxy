@@ -28,6 +28,7 @@ import tornado.websocket
 import mitmproxy.flow
 import mitmproxy.tools.web.master
 import mitmproxy_rs
+import tornado.ioloop
 from mitmproxy import certs
 from mitmproxy import command
 from mitmproxy import contentviews
@@ -426,13 +427,95 @@ class WebSocketEventBroadcaster(tornado.websocket.WebSocketHandler, AuthRequestH
         return json.dumps(d, ensure_ascii=False).encode("utf8", "surrogateescape")
 
 
+_last_cpu: tuple[float, float] | None = None
+
+
+def get_system_metrics() -> dict[str, Any]:
+    global _last_cpu
+    metrics: dict[str, Any] = {
+        "cpu": None,
+        "mem_pct": None,
+        "mem_used_mb": None,
+        "mem_total_mb": None,
+    }
+
+    # 1. 采集内存 (Linux /proc/meminfo)
+    try:
+        with open("/proc/meminfo", "r") as f:
+            lines = [f.readline() for _ in range(8)]
+        mem: dict[str, int] = {}
+        for line in lines:
+            parts = line.split(":")
+            if len(parts) == 2:
+                mem[parts[0].strip()] = int(parts[1].split()[0])
+        total_kb = mem.get("MemTotal")
+        avail_kb = mem.get("MemAvailable", mem.get("MemFree"))
+        if total_kb and avail_kb is not None:
+            used_kb = total_kb - avail_kb
+            metrics["mem_pct"] = round(used_kb / total_kb * 100, 1)
+            metrics["mem_used_mb"] = round(used_kb / 1024)
+            metrics["mem_total_mb"] = round(total_kb / 1024)
+    except Exception:
+        pass
+
+    # 2. 采集 CPU 使用率 (Linux /proc/stat)
+    try:
+        with open("/proc/stat", "r") as f:
+            cpu_line = f.readline().split()[1:]
+        times = [float(x) for x in cpu_line]
+        idle = times[3] + (times[4] if len(times) > 4 else 0)
+        total = sum(times)
+        if _last_cpu:
+            prev_total, prev_idle = _last_cpu
+            diff_total = total - prev_total
+            diff_idle = idle - prev_idle
+            if diff_total > 0:
+                metrics["cpu"] = max(0.0, min(100.0, round((1.0 - diff_idle / diff_total) * 100, 1)))
+        _last_cpu = (total, idle)
+    except Exception:
+        pass
+
+    return metrics
+
+
 class ClientConnection(WebSocketEventBroadcaster):
     connections: ClassVar[set[ClientConnection]] = set()  # type: ignore
     application: Application
+    _metrics_timer: ClassVar[tornado.ioloop.PeriodicCallback | None] = None
 
     def __init__(self, application: Application, request, **kwargs):
         super().__init__(application, request, **kwargs)
         self.filters: dict[str, flowfilter.TFilter] = {}  # filters per connection
+
+    def open(self, *args, **kwargs):
+        super().open(*args, **kwargs)
+        self.ensure_metrics_timer()
+
+    def on_close(self):
+        super().on_close()
+        self.ensure_metrics_timer()
+
+    @classmethod
+    def ensure_metrics_timer(cls) -> None:
+        if cls.connections:
+            if cls._metrics_timer is None:
+                # 每 3 秒采集一次并按需广播，EUserv 等微型 VPS 开销可忽略不计
+                cls._metrics_timer = tornado.ioloop.PeriodicCallback(
+                    cls._broadcast_metrics, 3000
+                )
+                cls._metrics_timer.start()
+        else:
+            if cls._metrics_timer is not None:
+                cls._metrics_timer.stop()
+                cls._metrics_timer = None
+
+    @classmethod
+    def _broadcast_metrics(cls) -> None:
+        if not cls.connections:
+            cls.ensure_metrics_timer()
+            return
+        metrics = get_system_metrics()
+        cls.broadcast(type="state/update", payload={"systemMetrics": metrics})
 
     @classmethod
     def broadcast_flow_reset(cls) -> None:
@@ -983,6 +1066,7 @@ class State(RequestHandler):
             },
             "platform": sys.platform,
             "localModeUnavailable": mitmproxy_rs.local.LocalRedirector.unavailable_reason(),
+            "systemMetrics": get_system_metrics(),
         }
 
     def get(self):

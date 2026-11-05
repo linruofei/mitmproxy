@@ -19,6 +19,9 @@ function FooterBadge({ variant, ...props }: FooterBadgeProps) {
 
 export default function Footer() {
     const version = useAppSelector((state) => state.backendState.version);
+    const systemMetrics = useAppSelector(
+        (state) => state.backendState.systemMetrics,
+    );
     const {
         mode,
         intercept,
@@ -90,6 +93,36 @@ export default function Footer() {
                 </FooterBadge>
             )}
             <div className="footer-meta">
+                {systemMetrics && (systemMetrics.cpu !== null || systemMetrics.mem_pct !== null) && (
+                    <FooterBadge
+                        variant={
+                            (systemMetrics.cpu !== null && systemMetrics.cpu > 85) ||
+                            (systemMetrics.mem_pct !== null && systemMetrics.mem_pct > 85)
+                                ? "danger"
+                                : (systemMetrics.cpu !== null && systemMetrics.cpu > 65) ||
+                                  (systemMetrics.mem_pct !== null && systemMetrics.mem_pct > 70)
+                                ? "info"
+                                : "neutral"
+                        }
+                        title={`Server Resource Usage (Updated every 3s)\nCPU: ${
+                            systemMetrics.cpu !== null ? `${systemMetrics.cpu}%` : "N/A"
+                        }\nMemory: ${
+                            systemMetrics.mem_used_mb !== null && systemMetrics.mem_total_mb !== null
+                                ? `${systemMetrics.mem_used_mb}MB / ${systemMetrics.mem_total_mb}MB (${systemMetrics.mem_pct}%)`
+                                : systemMetrics.mem_pct !== null
+                                ? `${systemMetrics.mem_pct}%`
+                                : "N/A"
+                        }`}
+                    >
+                        {systemMetrics.cpu !== null ? `CPU ${systemMetrics.cpu}%` : ""}
+                        {systemMetrics.cpu !== null && systemMetrics.mem_pct !== null ? " | " : ""}
+                        {systemMetrics.mem_pct !== null
+                            ? systemMetrics.mem_used_mb !== null && systemMetrics.mem_total_mb !== null
+                                ? `RAM ${systemMetrics.mem_used_mb}/${systemMetrics.mem_total_mb}MB`
+                                : `RAM ${systemMetrics.mem_pct}%`
+                            : ""}
+                    </FooterBadge>
+                )}
                 <HideInStatic>
                     {server && (
                         <FooterBadge

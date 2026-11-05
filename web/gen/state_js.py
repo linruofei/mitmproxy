@@ -51,6 +51,12 @@ async def make() -> str:
     data["version"] = "1.2.3"
     data["platform"] = "darwin"
     data["localModeUnavailable"] = None
+    data["systemMetrics"] = {
+        "cpu": 12.5,
+        "mem_pct": 45.0,
+        "mem_used_mb": 450,
+        "mem_total_mb": 1000,
+    }
 
     # language=TypeScript
     content = (

@@ -19,12 +19,20 @@ export interface ServerInfo {
     tun_name?: string;
 }
 
+export interface SystemMetrics {
+    cpu: number | null;
+    mem_pct: number | null;
+    mem_used_mb: number | null;
+    mem_total_mb: number | null;
+}
+
 export interface BackendState {
     version: string;
     contentViews: string[];
     servers: { [key: string]: ServerInfo };
     platform: string;
     localModeUnavailable: string | null;
+    systemMetrics?: SystemMetrics;
 }
 export interface BackendStateExtra extends BackendState {
     available: boolean;
@@ -37,6 +45,7 @@ export const defaultState: BackendStateExtra = {
     servers: {},
     platform: "",
     localModeUnavailable: null,
+    systemMetrics: undefined,
 };
 
 const backendStateSlice = createSlice({
