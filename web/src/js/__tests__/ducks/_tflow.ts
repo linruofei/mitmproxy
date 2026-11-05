@@ -29,8 +29,10 @@ export function THTTPFlow(): Required<HTTPFlow> {
         },
         "id": "d91165be-ca1f-4612-88a9-c0f8696f3e29",
         "intercepted": false,
+        "is_mock": false,
         "is_replay": undefined,
         "marked": "",
+        "mock_rule_name": "",
         "modified": false,
         "request": {
             "contentHash": "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73",
@@ -189,6 +191,7 @@ export function TTCPFlow(): Required<TCPFlow> {
         },
         "id": "2ea7012b-21b5-4f8f-98cd-d49819954001",
         "intercepted": false,
+        "is_mock": false,
         "is_replay": undefined,
         "marked": "",
         "messages_meta": {
@@ -196,6 +199,7 @@ export function TTCPFlow(): Required<TCPFlow> {
             "count": 2,
             "timestamp_last": 946681204.5
         },
+        "mock_rule_name": "",
         "modified": false,
         "server_conn": {
             "address": [
@@ -255,6 +259,7 @@ export function TUDPFlow(): Required<UDPFlow> {
         },
         "id": "f9f7b2b9-7727-4477-822d-d3526e5b8951",
         "intercepted": false,
+        "is_mock": false,
         "is_replay": undefined,
         "marked": "",
         "messages_meta": {
@@ -262,6 +267,7 @@ export function TUDPFlow(): Required<UDPFlow> {
             "count": 2,
             "timestamp_last": 946681204.5
         },
+        "mock_rule_name": "",
         "modified": false,
         "server_conn": {
             "address": [
@@ -321,8 +327,10 @@ export function TDNSFlow(): Required<DNSFlow> {
         },
         "id": "5434da94-1017-42fa-872d-a189508d48e4",
         "intercepted": false,
+        "is_mock": false,
         "is_replay": undefined,
         "marked": "",
+        "mock_rule_name": "",
         "modified": false,
         "request": {
             "additionals": [],
