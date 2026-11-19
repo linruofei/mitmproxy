@@ -126,6 +126,7 @@ type IconProps = {
     size?: number;
     strokeWidth?: number;
     className?: string;
+    style?: React.CSSProperties;
     onClick?: React.MouseEventHandler<SVGSVGElement>;
     "aria-label"?: string;
     title?: string;
@@ -136,6 +137,7 @@ export default function Icon({
     size = 16,
     strokeWidth = 2,
     className,
+    style,
     onClick,
     "aria-label": ariaLabel,
     title,
@@ -148,6 +150,7 @@ export default function Icon({
             size={size}
             strokeWidth={strokeWidth}
             className={classnames("icon", `icon-${name}`, className)}
+            style={style}
             onClick={onClick}
             aria-label={ariaLabel}
             aria-hidden={decorative || undefined}

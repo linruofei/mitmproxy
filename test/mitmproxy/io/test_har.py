@@ -16,6 +16,10 @@ def hardcode_variable_fields_for_tests(flow: dict) -> None:
     flow["timestamp_created"] = 0
     flow["server_conn"]["id"] = "hardcoded_for_test"
     flow["client_conn"]["id"] = "hardcoded_for_test"
+    # Local addition: `flow_to_json` always emits the mock markers, but HAR
+    # files carry no mock information, so the fixtures do not contain them.
+    flow.pop("is_mock", None)
+    flow.pop("mock_rule_name", None)
 
 
 def file_to_flows(path_name: Path) -> list[dict]:

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Button from "./common/Button";
 import Icon from "./common/Icon";
-import CodeEditor from "./contentviews/CodeEditor";
 import { fetchApi } from "../utils";
 import { useAppDispatch, useAppSelector } from "../ducks";
 import { hideModal } from "../ducks/ui/modal";
@@ -120,8 +119,8 @@ export default function RulesView() {
         // 如果是通过 flow 上的“添加拦截规则”打开，自动直接进入新建/编辑视图，并预填去掉参数后的完整请求路径
         if (modalData?.initialUrl) {
             const url = modalData.initialUrl;
-            let fullUrlWithoutQuery = url;
-            let pathNameOnly = url;
+            let fullUrlWithoutQuery = url,
+                pathNameOnly = url;
             try {
                 // 如果是标准完整 URL (http://... 或 https://...)
                 const parsed = new URL(url);

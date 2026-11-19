@@ -22,23 +22,23 @@ from typing import Literal
 from typing import Optional
 
 import tornado.escape
+import tornado.ioloop
 import tornado.web
 import tornado.websocket
 
 import mitmproxy.flow
 import mitmproxy.tools.web.master
 import mitmproxy_rs
-import tornado.ioloop
 from mitmproxy import certs
 from mitmproxy import command
 from mitmproxy import contentviews
 from mitmproxy import flowfilter
 from mitmproxy import http
+from mitmproxy import intercept_rules
 from mitmproxy import io
 from mitmproxy import log
 from mitmproxy import optmanager
 from mitmproxy import user_variables
-from mitmproxy import intercept_rules
 from mitmproxy import version
 from mitmproxy.dns import DNSFlow
 from mitmproxy.http import HTTPFlow
@@ -470,7 +470,9 @@ def get_system_metrics() -> dict[str, Any]:
             diff_total = total - prev_total
             diff_idle = idle - prev_idle
             if diff_total > 0:
-                metrics["cpu"] = max(0.0, min(100.0, round((1.0 - diff_idle / diff_total) * 100, 1)))
+                metrics["cpu"] = max(
+                    0.0, min(100.0, round((1.0 - diff_idle / diff_total) * 100, 1))
+                )
         _last_cpu = (total, idle)
     except Exception:
         pass
@@ -557,7 +559,9 @@ class ClientConnection(WebSocketEventBroadcaster):
             try:
                 filt = flowfilter.parse(expr)
                 self.filters[name] = filt
-                matching_flow_ids = [f.id for f in self.application.master.view if filt(f)]
+                matching_flow_ids = [
+                    f.id for f in self.application.master.view if filt(f)
+                ]
             except ValueError:
                 # 过滤表达式可能在输入过程中暂不完整（如单引号未闭合），优雅忽略而非断开连接
                 return
@@ -700,7 +704,9 @@ class FlowHandler(RequestHandler):
                         elif k == "content":
                             if view_name and view_name.lower() != "raw":
                                 cv = contentviews.registry.get(view_name.lower())
-                                if cv and isinstance(cv, contentviews.InteractiveContentview):
+                                if cv and isinstance(
+                                    cv, contentviews.InteractiveContentview
+                                ):
                                     try:
                                         request.content = contentviews.reencode_message(
                                             v,
@@ -709,7 +715,10 @@ class FlowHandler(RequestHandler):
                                             cv.name,
                                         )
                                     except Exception as e:
-                                        raise APIError(400, f"Failed to reencode content with {cv.name}: {e}")
+                                        raise APIError(
+                                            400,
+                                            f"Failed to reencode content with {cv.name}: {e}",
+                                        )
                                 else:
                                     request.text = v
                             else:
@@ -743,16 +752,23 @@ class FlowHandler(RequestHandler):
                         elif k == "content":
                             if view_name and view_name.lower() != "raw":
                                 cv = contentviews.registry.get(view_name.lower())
-                                if cv and isinstance(cv, contentviews.InteractiveContentview):
+                                if cv and isinstance(
+                                    cv, contentviews.InteractiveContentview
+                                ):
                                     try:
-                                        response.content = contentviews.reencode_message(
-                                            v,
-                                            response,
-                                            flow,
-                                            cv.name,
+                                        response.content = (
+                                            contentviews.reencode_message(
+                                                v,
+                                                response,
+                                                flow,
+                                                cv.name,
+                                            )
                                         )
                                     except Exception as e:
-                                        raise APIError(400, f"Failed to reencode content with {cv.name}: {e}")
+                                        raise APIError(
+                                            400,
+                                            f"Failed to reencode content with {cv.name}: {e}",
+                                        )
                                 else:
                                     response.text = v
                             else:
@@ -982,7 +998,9 @@ class InterceptRulesHandler(RequestHandler):
     def put(self):
         body = self.json
         if not isinstance(body, (list, dict)):
-            raise APIError(400, "Expected a list of rules or an object with rules property.")
+            raise APIError(
+                400, "Expected a list of rules or an object with rules property."
+            )
         rules = body.get("rules") if isinstance(body, dict) else body
         if not isinstance(rules, list):
             raise APIError(400, "Rules must be a list.")
@@ -990,10 +1008,12 @@ class InterceptRulesHandler(RequestHandler):
             intercept_rules.save_all_rules(rules)
         except Exception as err:
             raise APIError(500, f"Failed to save intercept rules: {err}")
-        self.write({
-            "rules": intercept_rules.get_all_rules(),
-            "handlers": intercept_rules.get_available_handler_names(),
-        })
+        self.write(
+            {
+                "rules": intercept_rules.get_all_rules(),
+                "handlers": intercept_rules.get_available_handler_names(),
+            }
+        )
 
 
 class InterceptRuleToggleHandler(RequestHandler):
@@ -1004,11 +1024,13 @@ class InterceptRuleToggleHandler(RequestHandler):
         res = intercept_rules.toggle_rule(rule_id, enabled)
         if res is None:
             raise APIError(404, f"Rule with id {rule_id} not found.")
-        self.write({
-            "rule": res,
-            "rules": intercept_rules.get_all_rules(),
-            "handlers": intercept_rules.get_available_handler_names(),
-        })
+        self.write(
+            {
+                "rule": res,
+                "rules": intercept_rules.get_all_rules(),
+                "handlers": intercept_rules.get_available_handler_names(),
+            }
+        )
 
 
 class MockFilesHandler(RequestHandler):
@@ -1036,10 +1058,12 @@ class MockFilesHandler(RequestHandler):
         except Exception as e:
             raise APIError(500, f"Failed to save file: {e}")
 
-        self.write({
-            "uploaded": saved,
-            "files": intercept_rules.list_server_mock_files(),
-        })
+        self.write(
+            {
+                "uploaded": saved,
+                "files": intercept_rules.list_server_mock_files(),
+            }
+        )
 
     def delete(self):
         filename = self.get_query_argument("filename", "")
@@ -1048,10 +1072,12 @@ class MockFilesHandler(RequestHandler):
         deleted = intercept_rules.delete_server_mock_file(filename)
         if not deleted:
             raise APIError(404, f"File {filename} not found.")
-        self.write({
-            "deleted": filename,
-            "files": intercept_rules.list_server_mock_files(),
-        })
+        self.write(
+            {
+                "deleted": filename,
+                "files": intercept_rules.list_server_mock_files(),
+            }
+        )
 
 
 class State(RequestHandler):

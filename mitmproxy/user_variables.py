@@ -2,7 +2,6 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
-from collections.abc import MutableMapping
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,8 @@ def _load_from_disk() -> dict[str, Any]:
     if not CONFIG_FILE.exists():
         try:
             CONFIG_FILE.write_text(
-                json.dumps(DEFAULT_CONFIG, indent=4, ensure_ascii=False), encoding="utf-8"
+                json.dumps(DEFAULT_CONFIG, indent=4, ensure_ascii=False),
+                encoding="utf-8",
             )
             _cache = dict(DEFAULT_CONFIG)
             _last_mtime = CONFIG_FILE.stat().st_mtime
@@ -92,9 +92,9 @@ class DynamicProxy:
             d[k] = v
             set(self._key, d)
         elif isinstance(cur, list):
-            l = list(cur)
-            l[k] = v
-            set(self._key, l)
+            lst = list(cur)
+            lst[k] = v
+            set(self._key, lst)
         else:
             raise TypeError("Target is not mutable mapping or sequence")
 
@@ -105,9 +105,9 @@ class DynamicProxy:
             del d[k]
             set(self._key, d)
         elif isinstance(cur, list):
-            l = list(cur)
-            del l[k]
-            set(self._key, l)
+            lst = list(cur)
+            del lst[k]
+            set(self._key, lst)
         else:
             raise TypeError("Target is not mutable mapping or sequence")
 

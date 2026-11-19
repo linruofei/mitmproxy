@@ -61,6 +61,12 @@ test("HttpMessage", async () => {
             ...cvd,
         }),
         "raw content",
+        // The editing view resolves the content view as well, to support
+        // interactive views.
+        JSON.stringify({
+            text: "rawdata\n".repeat(5),
+            ...cvd,
+        }),
         JSON.stringify({
             text: "rawdata\n".repeat(5),
             ...cvd,

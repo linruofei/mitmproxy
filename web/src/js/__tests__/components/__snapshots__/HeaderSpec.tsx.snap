@@ -42,7 +42,9 @@ exports[`Header 1`] = `
         connected
       </span>
     </nav>
-    <div>
+    <div
+      class="menu"
+    >
       <div
         class="flow-menu"
       >
@@ -423,7 +425,9 @@ exports[`Header 2`] = `
         connected
       </span>
     </nav>
-    <div>
+    <div
+      class="menu"
+    >
       <div>
         <div
           class="menu-group"
@@ -459,11 +463,38 @@ exports[`Header 2`] = `
               </svg>
                Edit Options
             </button>
+             
+            <button
+              class="btn btn-default"
+              title="打开自定义变量配置弹窗"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-braces icon icon-braces text-success"
+                fill="none"
+                height="16"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="16"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"
+                />
+                <path
+                  d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"
+                />
+              </svg>
+               自定义变量配置
+            </button>
           </div>
           <div
             class="menu-legend"
           >
-            Options Editor
+            配置与变量
           </div>
         </div>
         <div
@@ -952,7 +983,9 @@ exports[`Header 3`] = `
         connected
       </span>
     </nav>
-    <div>
+    <div
+      class="menu"
+    >
       <div>
         <div
           class="menu-group"
@@ -988,11 +1021,38 @@ exports[`Header 3`] = `
               </svg>
                Edit Options
             </button>
+             
+            <button
+              class="btn btn-default"
+              title="打开自定义变量配置弹窗"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-braces icon icon-braces text-success"
+                fill="none"
+                height="16"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="16"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"
+                />
+                <path
+                  d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"
+                />
+              </svg>
+               自定义变量配置
+            </button>
           </div>
           <div
             class="menu-legend"
           >
-            Options Editor
+            配置与变量
           </div>
         </div>
         <div
@@ -1316,7 +1376,9 @@ exports[`Header 4`] = `
         connected
       </span>
     </nav>
-    <div />
+    <div
+      class="menu"
+    />
   </header>
 </DocumentFragment>
 `;

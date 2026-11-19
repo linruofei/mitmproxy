@@ -146,32 +146,70 @@ exports[`MainMenu 1`] = `
             value=""
           />
         </div>
-        <button
-          class="btn-sm btn btn-default"
-          title="[a]ccept all"
+        <div
+          style="display: flex; align-items: center; gap: 6px;"
         >
-          <svg
-            aria-hidden="true"
-            class="lucide lucide-step-forward icon icon-resumeAll text-success"
-            fill="none"
-            height="16"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-            width="16"
-            xmlns="http://www.w3.org/2000/svg"
+          <button
+            class="btn-sm btn btn-default"
+            title="[a]ccept all"
           >
-            <path
-              d="M10.029 4.285A2 2 0 0 0 7 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"
-            />
-            <path
-              d="M3 4v16"
-            />
-          </svg>
-           Resume All
-        </button>
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-step-forward icon icon-resumeAll text-success"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10.029 4.285A2 2 0 0 0 7 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"
+              />
+              <path
+                d="M3 4v16"
+              />
+            </svg>
+             Resume All
+          </button>
+          <button
+            class="btn-sm btn btn-default"
+            title="拦截与返回规则管理"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-pause icon icon-pause text-warning"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                height="18"
+                rx="1"
+                width="5"
+                x="14"
+                y="3"
+              />
+              <rect
+                height="18"
+                rx="1"
+                width="5"
+                x="5"
+                y="3"
+              />
+            </svg>
+             拦截管理
+          </button>
+        </div>
       </div>
       <div
         class="menu-legend"

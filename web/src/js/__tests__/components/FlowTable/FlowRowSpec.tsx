@@ -101,7 +101,9 @@ test("the quickactions column selects the row except on a button", async () => {
     fireEvent.click(actions3);
     expect(store.getState().flows.selected).toEqual([tflow3]);
 
-    fireEvent.click(actions0.querySelector(".quickaction")!);
+    // The local "add intercept rule" quickaction comes first, resume is next.
+    const resume = actions0.querySelectorAll(".quickaction")[1];
+    fireEvent.click(resume);
     expect(store.getState().flows.selected).toEqual([tflow3]);
     expect(fetchMock).toHaveBeenCalledWith(
         `./flows/${tflow0.id}/resume`,

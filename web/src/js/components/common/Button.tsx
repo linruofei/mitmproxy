@@ -10,6 +10,7 @@ export interface ButtonProps {
     iconClassName?: string;
     disabled?: boolean;
     className?: string;
+    style?: React.CSSProperties;
     title?: string;
 }
 
@@ -20,6 +21,7 @@ export default function Button({
     iconClassName,
     disabled,
     className,
+    style,
     title,
 }: ButtonProps) {
     return (
@@ -27,6 +29,7 @@ export default function Button({
             className={classnames(className, "btn btn-default")}
             onClick={disabled ? undefined : onClick}
             disabled={disabled}
+            style={style}
             title={title}
         >
             {icon && (

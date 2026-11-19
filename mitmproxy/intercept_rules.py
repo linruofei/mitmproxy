@@ -1,10 +1,10 @@
 import inspect
 import json
 import logging
-import os
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from typing import Callable
 
 from mitmproxy import ctx
 from mitmproxy import flow
@@ -36,12 +36,14 @@ def list_server_mock_files() -> list[dict[str, Any]]:
     try:
         for p in dir_path.glob("*"):
             if p.is_file():
-                files_info.append({
-                    "name": p.name,
-                    "path": f"mock_files/{p.name}",
-                    "size": p.stat().st_size,
-                    "mtime": p.stat().st_mtime,
-                })
+                files_info.append(
+                    {
+                        "name": p.name,
+                        "path": f"mock_files/{p.name}",
+                        "size": p.stat().st_size,
+                        "mtime": p.stat().st_mtime,
+                    }
+                )
         files_info.sort(key=lambda x: x["mtime"], reverse=True)
     except Exception as e:
         logger.error(f"Error listing server mock files: {e}")
@@ -144,7 +146,11 @@ def get_user_script_handlers() -> dict[str, Callable]:
     """
     handlers: dict[str, Callable] = {}
     try:
-        if not hasattr(ctx, "master") or not ctx.master or not hasattr(ctx.master, "addons"):
+        if (
+            not hasattr(ctx, "master")
+            or not ctx.master
+            or not hasattr(ctx.master, "addons")
+        ):
             return handlers
 
         # 查找 ScriptLoader 插件
@@ -259,16 +265,20 @@ class RuleDispatcher:
                 delay_ms = max(0, int(rule.get("delay_ms", 0)))
                 if delay_ms > 0:
                     import time
+
                     time.sleep(delay_ms / 1000.0)
                 return
 
     def _handle_mock(self, f: http.HTTPFlow, rule: dict[str, Any]) -> None:
         mock_cfg = rule.get("mock_config", {})
         status_code = int(mock_cfg.get("status_code", 200))
-        headers = dict(mock_cfg.get("headers") or {
-            "Content-Type": "application/json;charset=UTF-8",
-            "Access-Control-Allow-Origin": "*",
-        })
+        headers = dict(
+            mock_cfg.get("headers")
+            or {
+                "Content-Type": "application/json;charset=UTF-8",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
 
         # 支持内联文本或从文件读取（支持文本和任意二进制文件）
         data_source = mock_cfg.get("data_source", "inline")
@@ -282,16 +292,30 @@ class RuleDispatcher:
                         raw_body = p.read_bytes()
                     else:
                         logger.error(f"Mock file not found: {p}")
-                        raw_body = f'{{"error": "Mock file not found: {file_path}"}}'.encode("utf-8")
+                        raw_body = (
+                            f'{{"error": "Mock file not found: {file_path}"}}'.encode(
+                                "utf-8"
+                            )
+                        )
                 except Exception as e:
                     logger.error(f"Failed to read mock file {file_path}: {e}")
-                    raw_body = f'{{"error": "Failed to read file: {e}"}}'.encode("utf-8")
+                    raw_body = f'{{"error": "Failed to read file: {e}"}}'.encode(
+                        "utf-8"
+                    )
             else:
                 body_val = mock_cfg.get("body", "")
-                raw_body = body_val.encode("utf-8") if isinstance(body_val, str) else bytes(body_val)
+                raw_body = (
+                    body_val.encode("utf-8")
+                    if isinstance(body_val, str)
+                    else bytes(body_val)
+                )
         else:
             body_val = mock_cfg.get("body", "")
-            raw_body = body_val.encode("utf-8") if isinstance(body_val, str) else bytes(body_val)
+            raw_body = (
+                body_val.encode("utf-8")
+                if isinstance(body_val, str)
+                else bytes(body_val)
+            )
 
         processor_type = mock_cfg.get("processor_type", "raw")
         script_handler_name = mock_cfg.get("script_handler", "")
@@ -325,13 +349,19 @@ class RuleDispatcher:
                         return
                     elif isinstance(res, (bytes, str, dict, list)):
                         if isinstance(res, (dict, list)):
-                            final_body = json.dumps(res, ensure_ascii=False).encode("utf-8")
+                            final_body = json.dumps(res, ensure_ascii=False).encode(
+                                "utf-8"
+                            )
                         else:
                             final_body = res
                 except Exception as e:
-                    logger.error(f"Error executing custom script handler {script_handler_name}: {e}")
+                    logger.error(
+                        f"Error executing custom script handler {script_handler_name}: {e}"
+                    )
             else:
-                logger.warning(f"Script handler {script_handler_name} not found in loaded user scripts.")
+                logger.warning(
+                    f"Script handler {script_handler_name} not found in loaded user scripts."
+                )
 
         if isinstance(final_body, str):
             body_bytes = final_body.encode("utf-8")

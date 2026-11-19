@@ -270,7 +270,9 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
             def prettify(self, data: bytes, metadata: contentviews.Metadata) -> str:
                 return data.decode().upper()
 
-            def reencode(self, prettified: str, metadata: contentviews.Metadata) -> bytes:
+            def reencode(
+                self, prettified: str, metadata: contentviews.Metadata
+            ) -> bytes:
                 return prettified.lower().encode()
 
         mock_cv = MockInteractiveView()
@@ -392,6 +394,7 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
 
     def test_variables(self):
         import tempfile
+
         import mitmproxy.user_variables as uv
 
         orig_config = uv.CONFIG_FILE

@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from mitmproxy import http
 from mitmproxy import intercept_rules
 from mitmproxy.test import tflow
@@ -45,7 +46,7 @@ def test_crud_and_auto_init():
             "action": "mock",
             "mock_config": {
                 "status_code": 200,
-                "body": "{\"code\": 0}",
+                "body": '{"code": 0}',
                 "processor_type": "raw",
             },
         },
