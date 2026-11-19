@@ -21,3 +21,19 @@ def test_render_priority():
     req.query = [("foo", "bar"), ("foo", "baz")]
     assert query.render_priority(b"", Metadata(http_message=req))
     assert not query.render_priority(b"", Metadata())
+
+
+def test_to_json():
+    req = tutils.treq()
+    req.query = [("foo", "bar"), ("foo", "baz"), ("single", "value")]
+    assert query.to_json(b"", Metadata(http_message=req)) == {
+        "foo": ["bar", "baz"],
+        "single": "value",
+    }
+
+    # no query parameters to copy
+    req.query = []
+    assert query.to_json(b"", Metadata(http_message=req)) is None
+
+    # not an HTTP request
+    assert query.to_json(b"", Metadata()) is None

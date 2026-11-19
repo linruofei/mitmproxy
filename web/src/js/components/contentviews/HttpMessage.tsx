@@ -13,7 +13,11 @@ import Button from "../common/Button";
 import CodeEditor from "./CodeEditor";
 import ContentRenderer from "./ContentRenderer";
 import ViewSelector from "./ViewSelector";
-import { copyViewContentDataToClipboard, fetchApi } from "../../utils";
+import {
+    copyToClipboard,
+    copyViewContentDataToClipboard,
+    fetchApi,
+} from "../../utils";
 
 type HttpMessageProps = {
     flow: HTTPFlow;
@@ -187,6 +191,9 @@ function HttpMessageView({ flow, message, startEdit }: HttpMessageViewProps) {
                 {contentViewData && contentViewData?.text.length > 0 && (
                     <CopyButton flow={flow} message={message} />
                 )}
+                {contentViewData?.json && (
+                    <CopyJSONButton json={contentViewData.json} />
+                )}
                 &nbsp;
                 <Button onClick={startEdit} icon="edit" className="btn-xs">
                     Edit
@@ -273,6 +280,33 @@ function CopyButton({ flow, message }: CopyButtonProps) {
             disabled={isFetchingFullContent}
         >
             {isCopied ? "Copied!" : "Copy"}
+        </Button>
+    );
+}
+
+type CopyJSONButtonProps = {
+    json: string;
+};
+
+function CopyJSONButton({ json }: CopyJSONButtonProps) {
+    const [isCopied, setIsCopied] = useState<boolean>(false);
+
+    const handleClickCopyJSONButton = async () => {
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+        // `copyToClipboard` is called synchronously so that we keep the user
+        // activation required by Safari's clipboard APIs.
+        await copyToClipboard(Promise.resolve(json));
+    };
+
+    return (
+        <Button
+            onClick={handleClickCopyJSONButton}
+            icon="braces"
+            className="btn-xs"
+            title="Copy the parsed parameters as a JSON object."
+        >
+            {isCopied ? "Copied!" : "Copy JSON"}
         </Button>
     );
 }

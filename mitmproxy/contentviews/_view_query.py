@@ -1,3 +1,5 @@
+import typing
+
 from .. import http
 from ._utils import merge_repeated_keys
 from ._utils import yaml_dumps
@@ -17,6 +19,13 @@ class QueryContentview(Contentview):
             raise ValueError("Not an HTTP request.")
         items = metadata.http_message.query.items(multi=True)
         return yaml_dumps(merge_repeated_keys(items))
+
+    def to_json(self, data: bytes, metadata: Metadata) -> typing.Any | None:
+        if not isinstance(metadata.http_message, http.Request):
+            return None
+        return (
+            merge_repeated_keys(metadata.http_message.query.items(multi=True)) or None
+        )
 
     def render_priority(
         self,

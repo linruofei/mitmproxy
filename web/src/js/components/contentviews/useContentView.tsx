@@ -8,6 +8,11 @@ export type ContentViewData = {
     view_name: string;
     syntax_highlight: string;
     description: string;
+    /**
+     * Optional structured representation of the content as a JSON string,
+     * only provided by contentviews that support it (e.g. query parameters).
+     */
+    json?: string;
     interactive?: boolean;
     from_client?: boolean;
     timestamp?: number;

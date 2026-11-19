@@ -1,3 +1,4 @@
+import typing
 import urllib
 import urllib.parse
 
@@ -19,6 +20,10 @@ class URLEncodedContentview(Contentview):
     ) -> str:
         items = urllib.parse.parse_qsl(data, keep_blank_values=True)
         return yaml_dumps(merge_repeated_keys(byte_pairs_to_str_pairs(items)))
+
+    def to_json(self, data: bytes, metadata: Metadata) -> typing.Any | None:
+        items = urllib.parse.parse_qsl(data, keep_blank_values=True)
+        return merge_repeated_keys(byte_pairs_to_str_pairs(items)) or None
 
     def render_priority(
         self,

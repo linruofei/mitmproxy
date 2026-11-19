@@ -167,6 +167,62 @@ describe("HttpMessage Copy Button", () => {
     });
 });
 
+describe("HttpMessage Copy JSON Button", () => {
+    class MockClipboardItem {
+        items: Record<string, Promise<string>>;
+
+        constructor(items: Record<string, Promise<string>>) {
+            this.items = items;
+        }
+    }
+
+    beforeEach(() => {
+        fetchMock.resetMocks();
+        (global as any).ClipboardItem = MockClipboardItem;
+    });
+
+    test("is only shown for contentviews that provide structured data", async () => {
+        fetchMock.mockResponse(JSON.stringify({ text: "data\n" }));
+
+        const tflow = TFlow();
+        render(<HttpMessage flow={tflow} message={tflow.request} />);
+
+        await waitFor(() => screen.getByText("Copy"));
+        expect(screen.queryByText("Copy JSON")).toBeNull();
+    });
+
+    test("copies the structured data as JSON", async () => {
+        const json = '{\n    "foo": "bar"\n}';
+        const write = jest.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            value: { write, writeText: jest.fn() },
+            configurable: true,
+        });
+
+        fetchMock.mockResponse(
+            JSON.stringify({
+                text: "foo: bar\n",
+                view_name: "Query",
+                description: "",
+                syntax_highlight: "yaml",
+                json,
+            }),
+        );
+
+        const tflow = TFlow();
+        render(<HttpMessage flow={tflow} message={tflow.request} />);
+
+        await waitFor(() => screen.getByText("Copy JSON"));
+        fireEvent.click(screen.getByText("Copy JSON"));
+
+        await waitFor(() => screen.getByText("Copied!"));
+
+        expect(write).toHaveBeenCalledTimes(1);
+        const item = write.mock.calls[0][0][0];
+        expect(await item.items["text/plain"]).toBe(json);
+    });
+});
+
 describe("HttpMessage body edit", () => {
     const cvd = { view_name: "Raw", description: "", syntax_highlight: "none" };
 

@@ -11,6 +11,7 @@ import sys
 import traceback
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 from ..addonmanager import cut_traceback
 from ._api import Contentview
@@ -54,6 +55,8 @@ class ContentviewResult:
     syntax_highlight: SyntaxHighlight
     view_name: str | None
     description: str
+    json: Any | None = None
+    """Optional structured representation of the content, if the view provides one."""
 
 
 registry = ContentviewRegistry()
@@ -86,6 +89,18 @@ def prettify_message(
             view_name=view.name,
             description=enc,
         )
+        try:
+            # `to_json` is optional and deliberately not part of the `Contentview`
+            # protocol: adding it there would break `isinstance` checks for
+            # third-party and Rust-based contentviews.
+            to_json = getattr(view, "to_json", None)
+            if to_json is not None:
+                ret.json = to_json(data, metadata)
+        except Exception as e:
+            logger.debug(
+                f"Contentview {view.name!r} failed to produce JSON: {e}",
+                exc_info=True,
+            )
     except Exception as e:
         logger.debug(f"Contentview {view.name!r} failed: {e}", exc_info=True)
         if view_name == "auto":

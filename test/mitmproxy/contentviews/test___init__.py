@@ -66,6 +66,19 @@ class TestPrettifyMessage:
             assert result.syntax_highlight == "none"
             assert result.view_name == "Hex Stream"
 
+    def test_json(self):
+        with taddons.context():
+            f = tflow.tflow()
+            f.request.headers["content-type"] = "application/x-www-form-urlencoded"
+            f.request.content = b"foo=bar&foo=baz"
+            result = prettify_message(f.request, f)
+            assert result.view_name == "URL-encoded"
+            assert result.json == {"foo": ["bar", "baz"]}
+
+            # views without a structured representation leave it unset
+            result = prettify_message(f.request, f, "raw")
+            assert result.json is None
+
     def test_view_failure_auto(self):
         registry = ContentviewRegistry()
         with taddons.context():

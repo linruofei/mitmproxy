@@ -433,6 +433,19 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
         }
         assert self.fetch("/flows/42/messages/content/raw").code == 400
 
+    def test_flow_contentview_json(self):
+        f = self.view.get_by_id("42")
+        f.request.path = "/path?foo=bar&foo=baz"
+
+        res = get_json(self.fetch("/flows/42/request/content/query"))
+        assert res["view_name"] == "Query"
+        assert json.loads(res["json"]) == {"foo": ["bar", "baz"]}
+        assert res["json"] == '{\n    "foo": [\n        "bar",\n        "baz"\n    ]\n}'
+
+        # views without a structured representation don't expose JSON.
+        res = get_json(self.fetch("/flows/42/request/content/raw"))
+        assert "json" not in res
+
     def test_flow_contentview_websocket(self):
         assert get_json(self.fetch("/flows/43/messages/content/raw?lines=2")) == [
             {

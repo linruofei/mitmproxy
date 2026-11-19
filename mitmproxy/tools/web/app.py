@@ -840,6 +840,8 @@ class FlowContentView(RequestHandler):
             syntax_highlight=pretty.syntax_highlight,
             description=pretty.description,
         )
+        if pretty.json is not None:
+            ret["json"] = json.dumps(pretty.json, ensure_ascii=False, indent=4)
         if pretty.view_name:
             cv = contentviews.registry.get(pretty.view_name.lower())
             if isinstance(cv, contentviews.InteractiveContentview):
